@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package envoy.extensions.upstreams.http.tcp.golang.v3alpha;
+
+import "udpa/annotations/status.proto";
+
+option java_package = "io.envoyproxy.envoy.extensions.upstreams.http.tcp.golang.v3alpha";
+option java_outer_classname = "GolangProto";
+option java_multiple_files = true;
+option go_package = "github.com/envoyproxy/go-control-plane/contrib/envoy/extensions/upstreams/http/tcp/golang/v3alpha";
+option (udpa.annotations.file_status).package_version_status = ACTIVE;
+
+// [#protodoc-title: Tcp Connection Pool]
+
+// A connection pool which forwards downstream HTTP as TCP to upstream,
+// [#extension: envoy.upstreams.http.tcp]
+message Config {
+}

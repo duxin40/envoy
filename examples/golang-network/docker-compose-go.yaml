@@ -7,11 +7,12 @@ services:
     command: >
       bash -c "
       cd examples/golang-network/simple
-      && go build -o simple.so -buildmode=c-shared .
-      && cp ./simple.so /output"
+      && go build -o simple-network.so -buildmode=c-shared .
+      && cp ./simple-network.so /output"
     working_dir: /source
     environment:
     - GOFLAGS=-buildvcs=false
+    - GODEBUG=cgocheck=0
     volumes:
     - ../..:/source
     - ./lib:/output
