@@ -1,18 +1,18 @@
 package main
 
 import (
-	"fmt"
-	"net"
+  "fmt"
+  // "net"
 
-	xds "github.com/cncf/xds/go/xds/type/v3"
-	"google.golang.org/protobuf/types/known/anypb"
+  // xds "github.com/cncf/xds/go/xds/type/v3"
+  // "google.golang.org/protobuf/types/known/anypb"
 
-	"github.com/envoyproxy/envoy/contrib/golang/common/go/api"
-	"github.com/envoyproxy/envoy/contrib/golang/filters/network/source/go/pkg/network"
+  "github.com/envoyproxy/envoy/contrib/golang/common/go/api"
+  "github.com/envoyproxy/envoy/contrib/golang/filters/network/source/go/pkg/network"
 )
 
 func init() {
-	network.RegisterNetworkFilterConfigFactory("simple", cf)
+  network.RegisterNetworkFilterConfigFactory("simple-network", cf)
 }
 
 var cf = &configFactory{}
@@ -20,113 +20,117 @@ var cf = &configFactory{}
 type configFactory struct{}
 
 func (f *configFactory) CreateFactoryFromConfig(config interface{}) network.FilterFactory {
-	a := config.(*anypb.Any)
-	configStruct := &xds.TypedStruct{}
-	_ = a.UnmarshalTo(configStruct)
+  // a := config.(*anypb.Any)
+  // configStruct := &xds.TypedStruct{}
+  // _ = a.UnmarshalTo(configStruct)
 
-	v := configStruct.Value.AsMap()["echo_server_addr"]
-	addr, err := net.LookupHost(v.(string))
-	if err != nil {
-		fmt.Printf("fail to resolve: %v, err: %v\n", v.(string), err)
-		return nil
-	}
-	upAddr := addr[0] + ":1025"
+  // v := configStruct.Value.AsMap()["echo_server_addr"]
+  // addr, err := net.LookupHost(v.(string))
+  // if err != nil {
+  //  fmt.Printf("fail to resolve: %v, err: %v\n", v.(string), err)
+  //  return nil
+  // }
+  // upAddr := addr[0] + ":1025"
 
-	return &filterFactory{
-		upAddr: upAddr,
-	}
+  // return &filterFactory{
+  //  upAddr: upAddr,
+  // }
+
+  return &filterFactory{
+    upAddr: "127.0.0.1:9901",
+  }
 }
 
 type filterFactory struct {
-	upAddr string
+  upAddr string
 }
 
 func (f *filterFactory) CreateFilter(cb api.ConnectionCallback) api.DownstreamFilter {
-	return &downFilter{
-		upAddr: f.upAddr,
-		cb:     cb,
-	}
+  return &downFilter{
+    upAddr: f.upAddr,
+    cb:     cb,
+  }
 }
 
 type downFilter struct {
-	api.EmptyDownstreamFilter
+  api.EmptyDownstreamFilter
 
-	cb       api.ConnectionCallback
-	upAddr   string
-	upFilter *upFilter
+  cb       api.ConnectionCallback
+  upAddr   string
+  upFilter *upFilter
 }
 
 func (f *downFilter) OnNewConnection() api.FilterStatus {
-	localAddr, _ := f.cb.StreamInfo().UpstreamLocalAddress()
-	remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
-	fmt.Printf("OnNewConnection, local: %v, remote: %v, connect to: %v\n", localAddr, remoteAddr, f.upAddr)
-	f.upFilter = &upFilter{
-		downFilter: f,
-		ch:         make(chan []byte, 1),
-	}
-	network.CreateUpstreamConn(f.upAddr, f.upFilter)
-	return api.NetworkFilterContinue
+  localAddr, _ := f.cb.StreamInfo().UpstreamLocalAddress()
+  remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
+  fmt.Printf("[downFilter]OnNewConnection, local: %v, remote: %v, connect to: %v\n", localAddr, remoteAddr, f.upAddr)
+  f.upFilter = &upFilter{
+    downFilter: f,
+    ch:         make(chan []byte, 1),
+  }
+  network.CreateUpstreamConn(f.upAddr, f.upFilter)
+  return api.NetworkFilterContinue
 }
 
 func (f *downFilter) OnData(buffer []byte, endOfStream bool) api.FilterStatus {
-	remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
-	fmt.Printf("OnData, addr: %v, buffer: %v, endOfStream: %v\n", remoteAddr, string(buffer), endOfStream)
-	buffer = append([]byte("hello, "), buffer...)
-	f.upFilter.ch <- buffer
-	return api.NetworkFilterContinue
+  remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
+  fmt.Printf("[downFilter]OnData, addr: %v, buffer: %v, endOfStream: %v\n", remoteAddr, string(buffer), endOfStream)
+  // buffer = append([]byte("hello, "), buffer...)
+  // f.upFilter.ch <- buffer
+  return api.NetworkFilterContinue
 }
 
 func (f *downFilter) OnEvent(event api.ConnectionEvent) {
-	remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
-	fmt.Printf("OnEvent, addr: %v, event: %v\n", remoteAddr, event)
+  remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
+  fmt.Printf("[downFilter]OnEvent, addr: %v, event: %v\n", remoteAddr, event)
 }
 
 func (f *downFilter) OnWrite(buffer []byte, endOfStream bool) api.FilterStatus {
-	fmt.Printf("OnWrite, buffer: %v, endOfStream: %v\n", string(buffer), endOfStream)
-	return api.NetworkFilterContinue
+  fmt.Printf("[downFilter]OnWrite, buffer: %v, endOfStream: %v\n", string(buffer), endOfStream)
+  return api.NetworkFilterContinue
 }
 
 type upFilter struct {
-	api.EmptyUpstreamFilter
+  api.EmptyUpstreamFilter
 
-	cb         api.ConnectionCallback
-	downFilter *downFilter
-	ch         chan []byte
+  cb         api.ConnectionCallback
+  downFilter *downFilter
+  ch         chan []byte
 }
 
 func (f *upFilter) OnPoolReady(cb api.ConnectionCallback) {
-	f.cb = cb
-	f.cb.EnableHalfClose(false)
-	localAddr, _ := f.cb.StreamInfo().UpstreamLocalAddress()
-	remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
-	fmt.Printf("OnPoolReady, local: %v, remote: %v\n", localAddr, remoteAddr)
-	go func() {
-		for {
-			buf, ok := <-f.ch
-			if !ok {
-				return
-			}
-			f.cb.Write(buf, false)
-		}
-	}()
+  f.cb = cb
+  // f.cb.EnableHalfClose(false)
+  localAddr, _ := f.cb.StreamInfo().UpstreamLocalAddress()
+  remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
+  fmt.Printf("[upFilter]OnPoolReady, local: %v, remote: %v\n", localAddr, remoteAddr)
+  // go func() {
+  //  for {
+  //    buf, ok := <-f.ch
+  //    if !ok {
+  //      return
+  //    }
+  //    f.cb.Write(buf, false)
+  //  }
+  // }()
 }
 
 func (f *upFilter) OnPoolFailure(poolFailureReason api.PoolFailureReason, transportFailureReason string) {
-	fmt.Printf("OnPoolFailure, reason: %v, transportFailureReason: %v\n", poolFailureReason, transportFailureReason)
+  fmt.Printf("[upFilter]OnPoolFailure, reason: %v, transportFailureReason: %v\n", poolFailureReason, transportFailureReason)
 }
 
 func (f *upFilter) OnData(buffer []byte, endOfStream bool) {
-	remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
-	fmt.Printf("OnData, addr: %v, buffer: %v, endOfStream: %v\n", remoteAddr, string(buffer), endOfStream)
-	f.downFilter.cb.Write(buffer, endOfStream)
+  remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
+  fmt.Printf("[upFilter]OnData, addr: %v, buffer: %v, endOfStream: %v\n", remoteAddr, string(buffer), endOfStream)
+  // f.downFilter.cb.Write(buffer, endOfStream)
 }
 
 func (f *upFilter) OnEvent(event api.ConnectionEvent) {
-	remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
-	fmt.Printf("OnEvent, addr: %v, event: %v\n", remoteAddr, event)
-	if event == api.LocalClose || event == api.RemoteClose {
-		close(f.ch)
-	}
+  remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
+  fmt.Printf("[upFilter]OnEvent, addr: %v, event: %v\n", remoteAddr, event)
+  // if event == api.LocalClose || event == api.RemoteClose {
+  //  close(f.ch)
+  // }
 }
 
 func main() {}
