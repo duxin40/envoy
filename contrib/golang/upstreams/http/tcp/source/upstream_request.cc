@@ -25,22 +25,46 @@ namespace Golang {
 void TcpConnPool::onPoolReady(Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& conn_data,
                               Upstream::HostDescriptionConstSharedPtr host) {
   upstream_handle_ = nullptr;
+  wrapper_ = new TcpConnPoolWrapper(weak_from_this());
   Network::Connection& latched_conn = conn_data->connection();
   auto upstream =
-      std::make_unique<TcpUpstream>(&callbacks_->upstreamToDownstream(), std::move(conn_data));
+      std::make_unique<TcpUpstream>(&callbacks_->upstreamToDownstream(), std::move(conn_data), dynamic_lib_, wrapper_);
+
+  go_conn_id_ = dynamic_lib_->envoyGoOnUpstreamConnectionReady(wrapper_,
+   reinterpret_cast<unsigned long long>(plugin_name_.data()), plugin_name_.length(),
+      config_id_);
+
   callbacks_->onPoolReady(std::move(upstream), host, latched_conn.connectionInfoProvider(),
-                          latched_conn.streamInfo(), {});
+                          latched_conn.streamInfo(), {});      
 }
 
 TcpUpstream::TcpUpstream(Router::UpstreamToDownstream* upstream_request,
-                         Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& upstream)
-    : upstream_request_(upstream_request), upstream_conn_data_(std::move(upstream)) {
+                         Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& upstream, Dso::TcpUpstreamDsoPtr dynamic_lib, TcpConnPoolWrapper* wrapper)
+    : upstream_request_(upstream_request), upstream_conn_data_(std::move(upstream)), dynamic_lib_(dynamic_lib), wrapper_(wrapper) {
   upstream_conn_data_->connection().enableHalfClose(true);
   upstream_conn_data_->addUpstreamCallbacks(*this);
 }
 
 void TcpUpstream::encodeData(Buffer::Instance& data, bool end_stream) {
-  end_stream = false;
+  // end_stream = false;
+
+  Buffer::RawSliceVector slice_vector = data.getRawSlices();
+  int slice_num = slice_vector.size();
+  unsigned long long* slices = new unsigned long long[2 * slice_num];
+  for (int i = 0; i < slice_num; i++) {
+    const Buffer::RawSlice& s = slice_vector[i];
+    slices[2 * i] = reinterpret_cast<unsigned long long>(s.mem_);
+    slices[2 * i + 1] = s.len_;
+  }
+
+  GoUint64 if_end_stream = dynamic_lib_->envoyGoEncodeData(wrapper_, data.length(),
+  reinterpret_cast<GoUint64>(slices), slice_num, end_stream);
+  if (if_end_stream == 0) {
+    end_stream = false;
+  } else {
+    end_stream = true;
+  }
+
   upstream_conn_data_->connection().write(data, end_stream);
 }
 
@@ -99,20 +123,48 @@ void TcpUpstream::resetStream() {
 }
 
 void TcpUpstream::onUpstreamData(Buffer::Instance& data, bool end_stream) {
-  end_stream = true;
-  if (response_buffer_.length() == 0) {
-    if (data.length() < DUBBO_MAGIC_SIZE || data.peekBEInt<uint16_t>() != DUBBO_MAGIC_NUMBER) {
-      data.drain(data.length());
-      data.add(ProtocolErrorMessage);
-      upstream_request_->decodeData(data, end_stream);
-      return;
-    }
+  ENVOY_LOG(debug, "onUpstreamData, data: {}, end: {}", data.toString(), end_stream);
+
+  Buffer::RawSliceVector slice_vector = data.getRawSlices();
+  int slice_num = slice_vector.size();
+  unsigned long long* slices = new unsigned long long[2 * slice_num];
+  for (int i = 0; i < slice_num; i++) {
+    const Buffer::RawSlice& s = slice_vector[i];
+    slices[2 * i] = reinterpret_cast<unsigned long long>(s.mem_);
+    slices[2 * i + 1] = s.len_;
   }
-  if (decodeDubboFrame(data) == DubboFrameDecodeStatus::Ok) {
-    uint32_t body_length_ = response_buffer_.peekBEInt<uint32_t>(DUBBO_LENGTH_OFFSET);
-    data.move(response_buffer_, body_length_ + DUBBO_HEADER_SIZE);
+
+  GoUint64 status = dynamic_lib_->envoyGoOnUpstreamData(wrapper_, data.length(),
+  reinterpret_cast<GoUint64>(slices), slice_num, end_stream);
+  if (status == 0) { // UpstreamDataContinue 
+    return;
+  } else if (status == 1) {
+    end_stream = true;
     upstream_request_->decodeData(data, end_stream);
+    return;
+  } else {
+    end_stream = true;
+    data.drain(data.length());
+    data.add(ProtocolErrorMessage);
+    upstream_request_->decodeData(data, end_stream);
+    return;
   }
+
+  // ENVOY_LOG(debug, "onUpstreamData, end_stream: {}", end_stream);
+  // // end_stream = true;
+  // if (response_buffer_.length() == 0) {
+  //   if (data.length() < DUBBO_MAGIC_SIZE || data.peekBEInt<uint16_t>() != DUBBO_MAGIC_NUMBER) {
+  //     data.drain(data.length());
+  //     data.add(ProtocolErrorMessage);
+  //     upstream_request_->decodeData(data, end_stream);
+  //     return;
+  //   }
+  // }
+  // if (decodeDubboFrame(data) == DubboFrameDecodeStatus::Ok) {
+  //   uint32_t body_length_ = response_buffer_.peekBEInt<uint32_t>(DUBBO_LENGTH_OFFSET);
+  //   data.move(response_buffer_, body_length_ + DUBBO_HEADER_SIZE);
+  //   upstream_request_->decodeData(data, end_stream);
+  // }
 }
 
 DubboFrameDecodeStatus TcpUpstream::decodeDubboFrame(Buffer::Instance& data) {
@@ -130,6 +182,8 @@ DubboFrameDecodeStatus TcpUpstream::decodeDubboFrame(Buffer::Instance& data) {
 }
 
 void TcpUpstream::onEvent(Network::ConnectionEvent event) {
+  dynamic_lib_->envoyGoOnUpstreamEvent(wrapper_, static_cast<int>(event));
+
   if (event != Network::ConnectionEvent::Connected && upstream_request_) {
     upstream_request_->onResetStream(Envoy::Http::StreamResetReason::ConnectionTermination, "");
   }

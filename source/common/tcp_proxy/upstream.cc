@@ -10,6 +10,7 @@
 #include "source/common/http/null_route_impl.h"
 #include "source/common/http/utility.h"
 #include "source/common/runtime/runtime_features.h"
+#include <cstddef>
 
 namespace Envoy {
 namespace TcpProxy {
@@ -307,7 +308,7 @@ HttpConnPool::createConnPool(Upstream::ThreadLocalCluster& cluster,
 
   return factory->createGenericConnPool(
       cluster, Envoy::Router::GenericConnPoolFactory::UpstreamProtocol::HTTP,
-      decoder_filter_callbacks_->route()->routeEntry()->priority(), protocol, context);
+      decoder_filter_callbacks_->route()->routeEntry()->priority(), protocol, context, cluster.info()->upstreamConfig()->typed_config());
 }
 
 HttpConnPool::~HttpConnPool() {

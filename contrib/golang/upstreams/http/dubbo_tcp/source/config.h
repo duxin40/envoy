@@ -22,7 +22,8 @@ public:
                         Router::GenericConnPoolFactory::UpstreamProtocol upstream_protocol,
                         Upstream::ResourcePriority priority,
                         absl::optional<Envoy::Http::Protocol> downstream_protocol,
-                        Upstream::LoadBalancerContext* ctx) const override;
+                        Upstream::LoadBalancerContext* ctx,
+                        const Protobuf::Message& config) const override;
   // Router::GenericConnPoolPtr
   // createGenericConnPool(Upstream::ThreadLocalCluster& thread_local_cluster, bool is_connect,
   //                       const Router::RouteEntry& route_entry,

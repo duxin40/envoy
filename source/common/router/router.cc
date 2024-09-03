@@ -847,7 +847,7 @@ Filter::createConnPool(Upstream::ThreadLocalCluster& thread_local_cluster) {
   }
   return factory->createGenericConnPool(thread_local_cluster, upstream_protocol,
                                         route_entry_->priority(),
-                                        callbacks_->streamInfo().protocol(), this);
+                                        callbacks_->streamInfo().protocol(), this, cluster_->upstreamConfig()->typed_config());
 }
 
 void Filter::sendNoHealthyUpstreamResponse() {
