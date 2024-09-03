@@ -34,6 +34,8 @@ type (
 	EmptyDownstreamFilter struct{}
 	// EmptyUpstreamFilter provides the no-op implementation of the UpstreamFilter interface
 	EmptyUpstreamFilter struct{}
+	// EmptyTcpUpstreamFilter provides the no-op implementation of the EmptyTcpUpstreamFilter interface
+	EmptyTcpUpstreamFilter struct{}
 )
 
 // request
@@ -206,7 +208,7 @@ type DownstreamFilter interface {
 	// Called when a connection is first established.
 	OnNewConnection() FilterStatus
 	// Called when data is read on the connection.
-	OnData(buffer []byte, endOfStream bool) FilterStatus
+	OnData(buffer []byte, endOfStream bool) UpstreamDataStatus
 	// Callback for connection events.
 	OnEvent(event ConnectionEvent)
 	// Called when data is to be written on the connection.
@@ -327,3 +329,31 @@ type GaugeMetric interface {
 // TODO
 type HistogramMetric interface {
 }
+
+type TcpUpstreamFilter interface {
+	// Called when a connection is available to process a request/response.
+	OnPoolReady()
+	// Called when a pool error occurred and no connection could be acquired for making the request.
+	OnPoolFailure(poolFailureReason PoolFailureReason, transportFailureReason string)
+	// Invoked when data is delivered from the upstream connection.
+	EncodeData(buffer []byte, endOfStream bool) (EndStream bool)
+	// Called when data is read on from tcp upstream.
+	OnUpstreamData(buffer []byte, endOfStream bool) UpstreamDataStatus
+	// Callback for connection events.
+	OnEvent(event ConnectionEvent)
+}
+
+func (*EmptyTcpUpstreamFilter) OnPoolReady() {}
+
+func (*EmptyTcpUpstreamFilter) OnPoolFailure(poolFailureReason PoolFailureReason, transportFailureReason string) {
+}
+
+func (*EmptyTcpUpstreamFilter) EncodeData(buffer []byte, endOfStream bool) bool {
+	return true
+}
+
+func (*EmptyTcpUpstreamFilter) OnUpstreamData(buffer []byte, endOfStream bool) UpstreamDataStatus {
+	return UpstreamDataFinish
+}
+
+func (*EmptyTcpUpstreamFilter) OnEvent(event ConnectionEvent) {}

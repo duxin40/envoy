@@ -11,11 +11,14 @@ import (
 	// "cgw.cestc.cn/gateway-control-plane/pkg/plugins/stream"
 	"dubbo.apache.org/dubbo-go/v3/common/constant"
 	"dubbo.apache.org/dubbo-go/v3/filter/generic/generalizer"
+
 	// "dubbo.apache.org/dubbo-go/v3/protocol"
+	"encoding/binary"
+
 	dubbo2 "dubbo.apache.org/dubbo-go/v3/protocol/dubbo"
 	invocation2 "dubbo.apache.org/dubbo-go/v3/protocol/invocation"
 	"dubbo.apache.org/dubbo-go/v3/remoting"
-	"encoding/binary"
+
 	// "encoding/json"
 	hessian "github.com/apache/dubbo-go-hessian2"
 	// "github.com/dubbogo/gost/log/logger"
@@ -30,7 +33,7 @@ var UpdateUpstreamBody = "upstream response body updated by the simple plugin"
 type filter struct {
 	api.PassThroughStreamFilter
 
-	Header   api.RequestHeaderMap
+	Header     api.RequestHeaderMap
 	RespHeader api.ResponseHeaderMap
 
 	callbacks api.FilterCallbackHandler
@@ -183,7 +186,7 @@ func (f *filter) EncodeData(buffer api.BufferInstance, endStream bool) api.Statu
 		return api.StopAndBuffer
 	}
 	api.LogInfof("[http2rpc][EncodeData] data: %+v", buffer)
-	api.LogInfof("[http2rpc][EncodeData] data: %+v", string(buffer.Bytes()[DUBBO_HEADER_SIZE :]))
+	api.LogInfof("[http2rpc][EncodeData] data: %+v", string(buffer.Bytes()[DUBBO_HEADER_SIZE:]))
 
 	// 读取Dubbo消息的长度
 	// dubboDataLength := int(binary.BigEndian.Uint32(buffer.Bytes()[DUBBO_LENGTH_OFFSET :]))

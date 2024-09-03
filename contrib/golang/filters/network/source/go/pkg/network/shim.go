@@ -152,7 +152,9 @@ func envoyGoFilterOnDownstreamData(wrapper unsafe.Pointer, dataSize uint64, data
 		buf = append(buf, data...)
 	}
 
-	return uint64(filter.OnData(buf, endOfStream == 1))
+	filter.OnData(buf, endOfStream == 1)
+
+	return 0
 }
 
 //export envoyGoFilterOnDownstreamEvent

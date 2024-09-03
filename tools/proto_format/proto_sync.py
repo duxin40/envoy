@@ -85,6 +85,8 @@ def sync(api_root, changed, mode, is_ci):
             _remove = []
             _update = None
             if member.name == "REMOVE":
+                ## TODO: 临时把这里跳过，之后需要结果http2tcp相关的新增proto文件被该脚本删除的问题
+                continue
                 to_remove = tarball.extractfile(member.name).read().decode("utf-8")
                 for path in to_remove.splitlines():
                     if mode != "check":

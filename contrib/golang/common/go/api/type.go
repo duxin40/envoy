@@ -450,3 +450,27 @@ var (
 )
 
 // *************** errors end **************//
+
+// Status codes returned by tcp upstream that can deal with data.
+type UpstreamDataStatus int
+
+const (
+	// Continue to deal with further data.
+	UpstreamDataContinue UpstreamDataStatus = 0
+	// Finish dealing with data.
+	UpstreamDataFinish UpstreamDataStatus = 1
+	// Failure when dealing with data.
+	UpstreamDataFailure UpstreamDataStatus = 2
+)
+
+func (s UpstreamDataStatus) String() string {
+	switch s {
+	case UpstreamDataContinue:
+		return "Continue"
+	case UpstreamDataFinish:
+		return "Finish"
+	case UpstreamDataFailure:
+		return "Failure"
+	}
+	return "unknown"
+}

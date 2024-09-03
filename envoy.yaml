@@ -137,7 +137,14 @@ static_resources:
       name: envoy.upstreams.http.tcp.golang
       typed_config:
         "@type": type.googleapis.com/envoy.extensions.upstreams.http.tcp.golang.v3alpha.Config
-        
+        library_id: simple-network
+        library_path: /Users/duxin/cpp/src/envoy/examples/golang-network/simple/envoy/libgolang.so
+        plugin_name: simple-network
+        plugin_config:
+          "@type": type.googleapis.com/xds.type.v3.TypedStruct
+          value:
+            prefix_localreply_body: "Configured local reply from gooo"
+  
     # upstream_config:
     #   name: envoy.upstreams.http.dubbo_tcp
     #   typed_config:

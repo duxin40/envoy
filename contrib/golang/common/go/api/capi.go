@@ -98,6 +98,11 @@ type NetworkCAPI interface {
 	UpstreamInfo(f unsafe.Pointer, infoType int) string
 }
 
+type TcpUpstreamCAPI interface {
+	// UpstreamInfo gets the upstream connection info of infoType
+	UpstreamInfo(f unsafe.Pointer, infoType int) string
+}
+
 type CommonCAPI interface {
 	Log(level LogType, message string)
 	LogLevel() LogType

@@ -34,6 +34,8 @@ envoy_cc_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        "//contrib/golang/common/dso:dso_lib",
+        "@envoy_api//contrib/envoy/extensions/upstreams/http/tcp/golang/v3alpha:pkg_cc_proto",
         "//envoy/http:codes_interface",
         "//envoy/http:filter_interface",
         "//envoy/upstream:upstream_interface",
