@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <utility>
 
 #include "envoy/upstream/upstream.h"
 
@@ -25,17 +26,21 @@ namespace Golang {
 void TcpConnPool::onPoolReady(Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& conn_data,
                               Upstream::HostDescriptionConstSharedPtr host) {
   upstream_handle_ = nullptr;
-  wrapper_ = new TcpConnPoolWrapper(weak_from_this());
+  wrapper_ = new TcpConnPoolWrapper(shared_from_this());
   Network::Connection& latched_conn = conn_data->connection();
   auto upstream =
-      std::make_unique<TcpUpstream>(&callbacks_->upstreamToDownstream(), std::move(conn_data), dynamic_lib_, wrapper_);
+      std::make_shared<TcpUpstream>(&callbacks_->upstreamToDownstream(), std::move(conn_data), dynamic_lib_, wrapper_);
 
   go_conn_id_ = dynamic_lib_->envoyGoOnUpstreamConnectionReady(wrapper_,
    reinterpret_cast<unsigned long long>(plugin_name_.data()), plugin_name_.length(),
       config_id_);
 
-  callbacks_->onPoolReady(std::move(upstream), host, latched_conn.connectionInfoProvider(),
+  ENVOY_LOG(debug, "get host info: {}", host->cluster().name());
+
+  callbacks_->onPoolReady(upstream, host, latched_conn.connectionInfoProvider(),
                           latched_conn.streamInfo(), {});      
+  // callbacks_->onPoolReady(std::move(upstream), host, latched_conn.connectionInfoProvider(),
+                          // latched_conn.streamInfo(), {});      
 }
 
 TcpUpstream::TcpUpstream(Router::UpstreamToDownstream* upstream_request,
@@ -199,6 +204,16 @@ void TcpUpstream::onBelowWriteBufferLowWatermark() {
   if (upstream_request_) {
     upstream_request_->onBelowWriteBufferLowWatermark();
   }
+}
+
+void TcpUpstream::enableHalfClose(bool enabled) {
+  // if (closed_) {
+  //   ENVOY_LOG(warn, "connection has closed, addr: {}", addr_);
+  //   return;
+  // }
+  ASSERT(upstream_conn_data_ != nullptr);
+  upstream_conn_data_->connection().enableHalfClose(enabled);
+  ENVOY_LOG(debug, "set enableHalfClose, enabled: {}, actualEnabled: {}", enabled, upstream_conn_data_->connection().isHalfCloseEnabled());
 }
 
 } // namespace Golang

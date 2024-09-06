@@ -332,7 +332,7 @@ type HistogramMetric interface {
 
 type TcpUpstreamFilter interface {
 	// Called when a connection is available to process a request/response.
-	OnPoolReady()
+	OnPoolReady(cb ConnectionCallback)
 	// Called when a pool error occurred and no connection could be acquired for making the request.
 	OnPoolFailure(poolFailureReason PoolFailureReason, transportFailureReason string)
 	// Invoked when data is delivered from the upstream connection.
@@ -343,7 +343,7 @@ type TcpUpstreamFilter interface {
 	OnEvent(event ConnectionEvent)
 }
 
-func (*EmptyTcpUpstreamFilter) OnPoolReady() {}
+func (*EmptyTcpUpstreamFilter) OnPoolReady(cb ConnectionCallback) {}
 
 func (*EmptyTcpUpstreamFilter) OnPoolFailure(poolFailureReason PoolFailureReason, transportFailureReason string) {
 }

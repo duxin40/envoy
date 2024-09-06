@@ -73,7 +73,7 @@ public:
 
   bool valid() const { return conn_pool_data_.has_value() || generic_conn_pool_; }
   Http::CodecType codecType() const { return type_; }
-  std::unique_ptr<Router::GenericConnPool> createConnPool(Upstream::ThreadLocalCluster&,
+  std::shared_ptr<Router::GenericConnPool> createConnPool(Upstream::ThreadLocalCluster&,
                                                           Upstream::LoadBalancerContext* context,
                                                           absl::optional<Http::Protocol> protocol);
 
@@ -144,7 +144,7 @@ private:
   std::unique_ptr<HttpUpstream> upstream_;
   std::unique_ptr<CombinedUpstream> combined_upstream_;
   StreamInfo::StreamInfo& downstream_info_;
-  std::unique_ptr<Router::GenericConnPool> generic_conn_pool_;
+  std::shared_ptr<Router::GenericConnPool> generic_conn_pool_;
 };
 
 class TcpUpstream : public GenericUpstream {

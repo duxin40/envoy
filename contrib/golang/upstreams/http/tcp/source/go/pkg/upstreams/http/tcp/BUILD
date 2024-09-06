@@ -6,7 +6,7 @@ go_library(
     name = "tcp_upstream",
     srcs = [
         "api.h",
-        "capi.go",
+        "capi_impl.go",
         "factory.go",
         # "filter.go",
         "shim.go",

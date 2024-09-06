@@ -510,7 +510,7 @@ private:
                    Server::Configuration::CommonFactoryContext& context,
                    Event::Dispatcher& dispatcher, Upstream::ResourcePriority priority) PURE;
 
-  std::unique_ptr<GenericConnPool>
+  std::shared_ptr<GenericConnPool>
   createConnPool(Upstream::ThreadLocalCluster& thread_local_cluster);
   UpstreamRequestPtr createUpstreamRequest();
   absl::optional<absl::string_view> getShadowCluster(const ShadowPolicy& shadow_policy,

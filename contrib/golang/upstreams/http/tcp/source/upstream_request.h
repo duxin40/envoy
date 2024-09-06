@@ -220,6 +220,7 @@ private:
   absl::optional<Envoy::Upstream::TcpPoolData> conn_pool_data_;
   Envoy::Tcp::ConnectionPool::Cancellable* upstream_handle_{};
   Router::GenericConnectionPoolCallbacks* callbacks_{};
+  Envoy::Tcp::ConnectionPool::ConnectionDataPtr upstream_conn_data_;
 
   // uint64_t wrapper_;
   Dso::TcpUpstreamDsoPtr dynamic_lib_;
@@ -251,6 +252,8 @@ public:
   void onBelowWriteBufferLowWatermark() override;
   const StreamInfo::BytesMeterSharedPtr& bytesMeter() override { return bytes_meter_; }
 
+  void enableHalfClose(bool enabled);
+
 private:
   DubboFrameDecodeStatus decodeDubboFrame(Buffer::Instance& data);
 
@@ -264,15 +267,15 @@ private:
   TcpConnPoolWrapper* wrapper_{nullptr};
 };
 
-using TcpConPoolSharedPtr = std::shared_ptr<TcpUpstream>;
+using TcpConPoolSharedPtr = std::shared_ptr<TcpConnPool>;
 using TcpConnPoolWeakPtr = std::weak_ptr<TcpConnPool>;
 
 struct TcpConnPoolWrapper {
 public:
-  TcpConnPoolWrapper(TcpConnPoolWeakPtr ptr) : tcp_upstream_ptr_(ptr) {}
+  TcpConnPoolWrapper(TcpConPoolSharedPtr ptr) : tcp_conn_pool_ptr_(ptr) {}
   ~TcpConnPoolWrapper() = default;
 
-  TcpConnPoolWeakPtr tcp_upstream_ptr_{};
+  TcpConPoolSharedPtr tcp_conn_pool_ptr_{};
   // anchor a string temporarily, make sure it won't be freed before copied to Go.
   std::string str_value_;
 };

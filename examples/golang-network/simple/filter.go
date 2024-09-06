@@ -7,6 +7,8 @@ import (
 	// xds "github.com/cncf/xds/go/xds/type/v3"
 	// "google.golang.org/protobuf/types/known/anypb"
 
+	"fmt"
+
 	"github.com/envoyproxy/envoy/contrib/golang/common/go/api"
 
 	"github.com/envoyproxy/envoy/contrib/golang/upstreams/http/tcp/source/go/pkg/upstreams/http/tcp"
@@ -55,7 +57,10 @@ type tcpUpstreamFilter struct {
 	cb api.ConnectionCallback
 }
 
-func (*tcpUpstreamFilter) OnPoolReady() {
+func (*tcpUpstreamFilter) OnPoolReady(cb api.ConnectionCallback) {
+	fmt.Println("#############")
+	fmt.Println(cb.StreamInfo().UpstreamClusterName())
+	fmt.Println("#############")
 }
 
 func (*tcpUpstreamFilter) OnPoolFailure(poolFailureReason api.PoolFailureReason, transportFailureReason string) {

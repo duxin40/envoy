@@ -101,6 +101,8 @@ type NetworkCAPI interface {
 type TcpUpstreamCAPI interface {
 	// UpstreamInfo gets the upstream connection info of infoType
 	UpstreamInfo(f unsafe.Pointer, infoType int) string
+	// UpstreamConnEnableHalfClose upstream conn EnableHalfClose
+	UpstreamConnEnableHalfClose(f unsafe.Pointer, enableHalfClose int)
 }
 
 type CommonCAPI interface {
