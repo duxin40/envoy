@@ -11,6 +11,7 @@
 #include "source/common/http/utility.h"
 #include "source/common/runtime/runtime_features.h"
 #include <cstddef>
+#include <memory>
 
 namespace Envoy {
 namespace TcpProxy {
@@ -295,7 +296,7 @@ HttpConnPool::HttpConnPool(Upstream::ThreadLocalCluster& thread_local_cluster,
       thread_local_cluster.httpConnPool(Upstream::ResourcePriority::Default, protocol, context);
 }
 
-std::unique_ptr<Router::GenericConnPool>
+std::shared_ptr<Router::GenericConnPool>
 HttpConnPool::createConnPool(Upstream::ThreadLocalCluster& cluster,
                              Upstream::LoadBalancerContext* context,
                              absl::optional<Http::Protocol> protocol) {

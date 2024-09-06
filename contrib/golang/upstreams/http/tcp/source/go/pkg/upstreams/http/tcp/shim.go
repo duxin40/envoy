@@ -84,14 +84,13 @@ func envoyGoOnTcpUpstreamConfig(libraryIDPtr uint64, libraryIDLen uint64, config
 //export envoyGoOnUpstreamConnectionReady
 func envoyGoOnUpstreamConnectionReady(wrapper unsafe.Pointer, pluginNamePtr uint64, pluginNameLen uint64,
 	configID uint64) uint64 {
-	// cb := &connectionCallback{
-	// 	wrapper:                 wrapper,
-	// 	writeFunc:               cgoAPI.UpstreamWrite,
-	// 	closeFunc:               cgoAPI.UpstreamClose,
-	// 	infoFunc:                cgoAPI.UpstreamInfo,
-	// 	connEnableHalfCloseFunc: cgoAPI.UpstreamConnEnableHalfClose,
-	// }
-	// switch filter from idMap to wrapperMap
+	cb := &connectionCallback{
+		wrapper:                 wrapper,
+		writeFunc:               nil,
+		closeFunc:               nil,
+		infoFunc:                cgoAPI.UpstreamInfo,
+		connEnableHalfCloseFunc: cgoAPI.UpstreamConnEnableHalfClose,
+	}
 	pluginName := strings.Clone(utils.BytesToString(pluginNamePtr, pluginNameLen))
 	// pluginName := "simple-network"
 	f := GetTcpUpstreamConfigFactory(pluginName)
@@ -109,7 +108,7 @@ func envoyGoOnUpstreamConnectionReady(wrapper unsafe.Pointer, pluginNamePtr uint
 	// UpstreamFilters.DeleteFilterByConnID(connID)
 	UpstreamFilters.StoreFilterByWrapper(uint64(uintptr(wrapper)), filter)
 
-	filter.OnPoolReady()
+	filter.OnPoolReady(cb)
 
 	return connID
 }

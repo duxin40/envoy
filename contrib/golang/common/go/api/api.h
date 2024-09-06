@@ -137,6 +137,10 @@ CAPIStatus envoyGoFilterSetFilterState(void* wrapper, void* key, void* value, in
                                        int life_span, int stream_sharing);
 CAPIStatus envoyGoFilterGetFilterState(void* wrapper, void* key, void* value);
 
+// tcp upstream
+CAPIStatus envoyGoTcpUpstreamInfo(void* u, int info_type, void* ret);
+CAPIStatus envoyGoTcpUpstreamConnEnableHalfClose(void* u, int enable_half_close);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

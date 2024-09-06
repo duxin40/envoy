@@ -427,8 +427,10 @@ func (r PoolFailureReason) String() string {
 type ConnectionInfoType int
 
 const (
-	ConnectionInfoLocalAddr  ConnectionInfoType = 0
-	ConnectionInfoRemoteAddr ConnectionInfoType = 1
+	ConnectionInfoLocalAddr   ConnectionInfoType = 0
+	ConnectionInfoRemoteAddr  ConnectionInfoType = 1
+	ConnectionInfoRouterName  ConnectionInfoType = 2
+	ConnectionInfoClusterName ConnectionInfoType = 3
 )
 
 func (t ConnectionInfoType) String() string {
@@ -437,6 +439,10 @@ func (t ConnectionInfoType) String() string {
 		return "ConnectionInfoLocalAddr"
 	case ConnectionInfoRemoteAddr:
 		return "ConnectionInfoRemoteAddr"
+	case ConnectionInfoRouterName:
+		return "ConnectionInfoRouterName"
+	case ConnectionInfoClusterName:
+		return "ConnectionInfoClusterName"
 	}
 	return "unknown"
 }
@@ -471,6 +477,23 @@ func (s UpstreamDataStatus) String() string {
 		return "Finish"
 	case UpstreamDataFailure:
 		return "Failure"
+	}
+	return "unknown"
+}
+
+type TcpUpstreamInfoType int
+
+const (
+	TcpUpstreamInfoRouterName  TcpUpstreamInfoType = 0
+	TcpUpstreamInfoClusterName TcpUpstreamInfoType = 1
+)
+
+func (t TcpUpstreamInfoType) String() string {
+	switch t {
+	case TcpUpstreamInfoRouterName:
+		return "TcpUpstreamInfoRouterName"
+	case TcpUpstreamInfoClusterName:
+		return "TcpUpstreamInfoClusterName"
 	}
 	return "unknown"
 }
