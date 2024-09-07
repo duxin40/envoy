@@ -54,15 +54,8 @@ public:
   TcpConnPool(Upstream::ThreadLocalCluster& thread_local_cluster,
               Upstream::ResourcePriority priority, Upstream::LoadBalancerContext* ctx, const Protobuf::Message& config) {
     conn_pool_data_ = thread_local_cluster.tcpConnPool(priority, ctx);
-    // const auto* configPtr = dynamic_cast<const envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config*>(&config);  
 
     envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config c;
-    // // MessageUtil::wireCast(config, c);
-    // // bool x = any.Is<envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config>();
-    // // Protobuf::Message m = envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config();
-
-    // ENVOY_LOG(debug, "translate success config type name: {}", config.GetTypeName());
-    // ENVOY_LOG(debug, "translate success config: {}", config.InitializationErrorString());
     
     ProtobufWkt::Any any;
     any.ParseFromString(config.SerializeAsString());
@@ -92,92 +85,6 @@ public:
      reinterpret_cast<unsigned long long>(config_str.data()), config_str.length());
     }
     plugin_name_ = c.plugin_name();
-
-    // ProtobufWkt::Any any;
-    // MessageUtil::packFrom(any, config);
-    // ENVOY_LOG(debug, "translate success any: {}", any.DebugString());
-    // // bool p = any.UnpackTo(c);
-    // ENVOY_LOG(debug, "translate success any value: {}", any.value().c_str());
-
-    // // auto* any_message = Protobuf::DynamicCastToGenerated<ProtobufWkt::Any>(&config);
-    // // std::unique_ptr<Protobuf::Message> inner_message;
-    // // inner_message = Helper::typeUrlToMessage(any_message->type_url());
-    // // target_type_url = any_message->type_url();
-    // // // inner_message must be valid as parsing would have already failed to load if there was an
-    // // // invalid type_url.
-    // // RETURN_IF_NOT_OK(MessageUtil::unpackTo(*any_message, *inner_message));
-
-
-
-    // // absl::Status p = MessageUtil::unpackTo(any, c);
-    // // ENVOY_LOG(debug, "translate success result: {}", p);
-
-    // // absl::Status s = MessageUtil::unpackTo(any, c);
-
-    // // bool s = any.UnpackTo(&c);
-
-    // // std::string buf;
-    // // auto res = any.SerializeToString(&buf);
-    // // ENVOY_LOG(debug, "translate success SerializeToString: {}", res);
-
-
-    // // ProtobufWkt::Any any_message;
-    // // any_message.set_type_url("type.googleapis.com/envoy.extensions.upstreams.http.tcp.golang.v3alpha.Config");
-    // // any_message.set_value(any.value());
-    // // ENVOY_LOG(debug, "translate success any_message: {}", any_message.value());
-
-    // // xds::type::v3::TypedStruct xx;
-    // envoy::config::core::v3::TypedExtensionConfig xx;
-    // bool ss = xx.ParseFromString(*any.mutable_value());
-    // // absl::Status dd = MessageUtil::unpackTo(xx.typed_config(), c);
-    // ENVOY_LOG(debug, "translate success result xxxxxxxxxx: {}", ss);
-    // // ENVOY_LOG(debug, "translate success result xxxxxxxxxx: {}", dd);
-    // ENVOY_LOG(debug, "translate success result: {}", xx.typed_config().value().c_str());
-    // ENVOY_LOG(debug, "translate success result: {}", xx.typed_config().Is<envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config>());
-    // // ENVOY_LOG(debug, "translate success result: {}", c.library_id());
-
-
-
-
-
-    // bool s = c.ParseFromString(any.value());
-    // ENVOY_LOG(debug, "translate success type name: {}", config.GetTypeName());
-    // ENVOY_LOG(debug, "translate success type name: {}", c.GetTypeName());
-    // ENVOY_LOG(debug, "translate success type name: {}", any.GetTypeName());
-    // ENVOY_LOG(debug, "translate success result: {}", s);
-    // ENVOY_LOG(debug, "translate success result: {}", c.DebugString());
-    // ENVOY_LOG(debug, "translate success result: {}", c.has_plugin_config());
-
-    
-
-    // // ENVOY_LOG(debug, "translate success: {}", config.GetDescriptor()->DebugString());
-    // // ENVOY_LOG(debug, "translate success: {}", c.GetDescriptor()->DebugString());
-    // ENVOY_LOG(debug, "translate success: {}", c.ByteSizeLong());
-    // // ENVOY_LOG(debug, "translate success: {}", c.library_path().size());
-    // // ENVOY_LOG(debug, "translate success: {}", c.library_path());
-    // // ENVOY_LOG(debug, "translate success: {}", c.library_id().size());
-    // // ENVOY_LOG(debug, "translate success: {}", c.library_id());
-    // // ENVOY_LOG(debug, "translate success: {}", c.plugin_name().size());
-    // // ENVOY_LOG(debug, "translate success: {}", c.plugin_name());
-    // // ENVOY_LOG(debug, "translate success: {}", c.plugin_config().ByteSizeLong());
-    // // ENVOY_LOG(debug, "translate success: {}", c.plugin_config().DebugString());
-    // // ENVOY_LOG(debug, "translate success: {}", c.ByteSizeLong());
-
-    // ENVOY_LOG(debug, "load tcp_upstream_golang library: {} {}", dynamic_lib_);
-
-    // FilterConfigSharedPtr config = std::make_shared<FilterConfig>(
-    //     c, dso_lib, fmt::format("{}tcp_upstream_golang.", stats_prefix), context);
-    // config->newGoPluginConfig();
-    // return [config, dso_lib](Http::FilterChainFactoryCallbacks& callbacks) {
-    //   const std::string& worker_name = callbacks.dispatcher().name();
-    //   auto pos = worker_name.find_first_of('_');
-    //   ENVOY_BUG(pos != std::string::npos, "worker name is not in expected format worker_{id}");
-    //   uint32_t worker_id;
-    //   if (!absl::SimpleAtoi(worker_name.substr(pos + 1), &worker_id)) {
-    //     IS_ENVOY_BUG("failed to parse worker id from name");
-    //   }
-    //   auto filter = std::make_shared<Filter>(config, dso_lib, worker_id);
-    //   }
 
   }
   void newStream(Router::GenericConnectionPoolCallbacks* callbacks) override {
@@ -222,7 +129,6 @@ private:
   Router::GenericConnectionPoolCallbacks* callbacks_{};
   Envoy::Tcp::ConnectionPool::ConnectionDataPtr upstream_conn_data_;
 
-  // uint64_t wrapper_;
   Dso::TcpUpstreamDsoPtr dynamic_lib_;
   TcpConnPoolWrapper* wrapper_{nullptr};
 };
@@ -282,19 +188,6 @@ public:
   // anchor a string temporarily, make sure it won't be freed before copied to Go.
   std::string str_value_;
 };
-
-// using TcpUpstreamSharedPtr = std::shared_ptr<TcpUpstream>;
-// using TcpUpstreamWeakPtr = std::weak_ptr<TcpUpstream>;
-
-// struct TcpUpstreamWrapper {
-// public:
-//   TcpUpstreamWrapper(TcpUpstreamWeakPtr ptr) : tcp_upstream_ptr_(ptr) {}
-//   ~TcpUpstreamWrapper() = default;
-
-//   TcpUpstreamWeakPtr tcp_upstream_ptr_{};
-//   // anchor a string temporarily, make sure it won't be freed before copied to Go.
-//   std::string str_value_;
-// };
 
 
 } // namespace Golang
