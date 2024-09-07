@@ -58,9 +58,15 @@ type tcpUpstreamFilter struct {
 }
 
 func (*tcpUpstreamFilter) OnPoolReady(cb api.ConnectionCallback) {
+	clusterName, _ := cb.StreamInfo().UpstreamClusterName()
 	fmt.Println("#############")
-	fmt.Println(cb.StreamInfo().UpstreamClusterName())
+	fmt.Println(clusterName)
 	fmt.Println("#############")
+	fmt.Println("###")
+	fmt.Println(cb.StreamInfo().GetRouteName())
+	fmt.Println("###")
+
+	cb.EnableHalfClose(true)
 }
 
 func (*tcpUpstreamFilter) OnPoolFailure(poolFailureReason api.PoolFailureReason, transportFailureReason string) {

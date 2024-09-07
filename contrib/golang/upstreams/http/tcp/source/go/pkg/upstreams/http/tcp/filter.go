@@ -68,7 +68,7 @@ func (n *connectionCallback) EnableHalfClose(enabled bool) {
 }
 
 func (n *connectionCallback) GetRouteName() string {
-	panic("implement me")
+	return n.infoFunc(n.wrapper, int(api.ConnectionInfoRouterName))
 }
 
 func (n *connectionCallback) FilterChainName() string {
@@ -105,12 +105,12 @@ func (n *connectionCallback) DownstreamRemoteAddress() string {
 
 // UpstreamLocalAddress return the upstream local address.
 func (n *connectionCallback) UpstreamLocalAddress() (string, bool) {
-	return n.infoFunc(n.wrapper, int(api.ConnectionInfoLocalAddr)), true
+	panic("implement me")
 }
 
 // UpstreamRemoteAddress return the upstream remote address.
 func (n *connectionCallback) UpstreamRemoteAddress() (string, bool) {
-	return n.infoFunc(n.wrapper, int(api.ConnectionInfoRemoteAddr)), true
+	panic("implement me")
 }
 
 func (n *connectionCallback) UpstreamClusterName() (string, bool) {
