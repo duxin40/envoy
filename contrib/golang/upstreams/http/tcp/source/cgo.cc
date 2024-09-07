@@ -44,16 +44,17 @@ extern "C" {
 
 CAPIStatus envoyGoTcpUpstreamInfo(void* u, int info_type, void* ret) {
   auto* wrapper = reinterpret_cast<TcpConnPoolWrapper*>(u);
-  TcpConPoolSharedPtr& shared_ptr = wrapper->tcp_conn_pool_ptr_;
+  TcpConPoolSharedPtr& pool_shared_ptr = wrapper->tcp_conn_pool_ptr_;
+  TcpUpstreamSharedPtr& upstream_shared_ptr = wrapper->tcp_upstream_ptr_;
 
   // if (TcpConPoolSharedPtr uu = weak_ptr.lock()) {
   auto* goStr = reinterpret_cast<GoString*>(ret);
   switch (static_cast<ConnectionInfoType>(info_type)) {
   case ConnectionInfoType::ConnectionInfoRouterName:
-    wrapper->str_value_ = "test";
+    wrapper->str_value_ = upstream_shared_ptr->route_entry_->virtualHost().routeConfig().name();
     break;
   case ConnectionInfoType::ConnectionInfoClusterName:
-    wrapper->str_value_ = shared_ptr->host()->cluster().name();
+    wrapper->str_value_ = pool_shared_ptr->host()->cluster().name();
     break;
   default:
     PANIC_DUE_TO_CORRUPT_ENUM;
@@ -67,11 +68,11 @@ CAPIStatus envoyGoTcpUpstreamInfo(void* u, int info_type, void* ret) {
   return CAPIStatus::CAPIFilterIsGone;
 }
 
-CAPIStatus envoyGoTcpUpstreamConnEnableHalfClose(void* , int ) {
-  // auto* wrapper = reinterpret_cast<TcpConnPoolWrapper*>(u);
-  // TcpConPoolSharedPtr& shared_ptr = wrapper->tcp_conn_pool_ptr_;
+CAPIStatus envoyGoTcpUpstreamConnEnableHalfClose(void* u, int enable_half_close) {
+  auto* wrapper = reinterpret_cast<TcpConnPoolWrapper*>(u);
+  TcpUpstreamSharedPtr& upstream_shared_ptr = wrapper->tcp_upstream_ptr_;
 
-  // shared_ptr->enableHalfClose(static_cast<bool>(enable_half_close));
+  upstream_shared_ptr->enableHalfClose(static_cast<bool>(enable_half_close));
 
   return CAPIOK;
 }

@@ -26,10 +26,13 @@ namespace Golang {
 void TcpConnPool::onPoolReady(Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& conn_data,
                               Upstream::HostDescriptionConstSharedPtr host) {
   upstream_handle_ = nullptr;
-  wrapper_ = new TcpConnPoolWrapper(shared_from_this());
   Network::Connection& latched_conn = conn_data->connection();
   auto upstream =
-      std::make_shared<TcpUpstream>(&callbacks_->upstreamToDownstream(), std::move(conn_data), dynamic_lib_, wrapper_);
+      std::make_shared<TcpUpstream>(&callbacks_->upstreamToDownstream(), std::move(conn_data), dynamic_lib_);
+
+  wrapper_ = new TcpConnPoolWrapper(shared_from_this(), upstream);
+
+  upstream->wrapper_ = wrapper_;
 
   go_conn_id_ = dynamic_lib_->envoyGoOnUpstreamConnectionReady(wrapper_,
    reinterpret_cast<unsigned long long>(plugin_name_.data()), plugin_name_.length(),
@@ -44,8 +47,9 @@ void TcpConnPool::onPoolReady(Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& co
 }
 
 TcpUpstream::TcpUpstream(Router::UpstreamToDownstream* upstream_request,
-                         Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& upstream, Dso::TcpUpstreamDsoPtr dynamic_lib, TcpConnPoolWrapper* wrapper)
-    : upstream_request_(upstream_request), upstream_conn_data_(std::move(upstream)), dynamic_lib_(dynamic_lib), wrapper_(wrapper) {
+                         Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& upstream, Dso::TcpUpstreamDsoPtr dynamic_lib)
+    :route_entry_(upstream_request->route().routeEntry()), upstream_request_(upstream_request), upstream_conn_data_(std::move(upstream)), dynamic_lib_(dynamic_lib){
+  
   upstream_conn_data_->connection().enableHalfClose(true);
   upstream_conn_data_->addUpstreamCallbacks(*this);
 }
@@ -80,12 +84,12 @@ Envoy::Http::Status TcpUpstream::encodeHeaders(const Envoy::Http::RequestHeaderM
 
   // Headers should only happen once, so use this opportunity to add the proxy
   // proto header, if configured.
-  const Router::RouteEntry* route_entry = upstream_request_->route().routeEntry();
-  
-  ASSERT(route_entry != nullptr);
-  if (route_entry->connectConfig().has_value()) {
+  // const Router::RouteEntry* route_entry = upstream_request_->route().routeEntry();
+
+  ASSERT(route_entry_ != nullptr);
+  if (route_entry_->connectConfig().has_value()) {
     Buffer::OwnedImpl data;
-    const auto& connect_config = route_entry->connectConfig();
+    const auto& connect_config = route_entry_->connectConfig();
     if (connect_config->has_proxy_protocol_config() &&
         upstream_request_->connection().has_value()) {
       Extensions::Common::ProxyProtocol::generateProxyProtoHeader(

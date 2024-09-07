@@ -233,7 +233,7 @@ class TcpUpstream : public Router::GenericUpstream,
                     Logger::Loggable<Logger::Id::golang>  {
 public:
   TcpUpstream(Router::UpstreamToDownstream* upstream_request,
-              Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& upstream, Dso::TcpUpstreamDsoPtr dynamic_lib, TcpConnPoolWrapper* wrapper);
+              Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& upstream, Dso::TcpUpstreamDsoPtr dynamic_lib);
 
   // GenericUpstream
   void encodeData(Buffer::Instance& data, bool end_stream) override;
@@ -254,6 +254,9 @@ public:
 
   void enableHalfClose(bool enabled);
 
+  const Router::RouteEntry* route_entry_;
+  TcpConnPoolWrapper* wrapper_{nullptr};
+
 private:
   DubboFrameDecodeStatus decodeDubboFrame(Buffer::Instance& data);
 
@@ -264,18 +267,18 @@ private:
   StreamInfo::BytesMeterSharedPtr bytes_meter_{std::make_shared<StreamInfo::BytesMeter>()};
 
   Dso::TcpUpstreamDsoPtr dynamic_lib_;
-  TcpConnPoolWrapper* wrapper_{nullptr};
 };
 
 using TcpConPoolSharedPtr = std::shared_ptr<TcpConnPool>;
-using TcpConnPoolWeakPtr = std::weak_ptr<TcpConnPool>;
+using TcpUpstreamSharedPtr = std::shared_ptr<TcpUpstream>;
 
 struct TcpConnPoolWrapper {
 public:
-  TcpConnPoolWrapper(TcpConPoolSharedPtr ptr) : tcp_conn_pool_ptr_(ptr) {}
+  TcpConnPoolWrapper(TcpConPoolSharedPtr ptr, TcpUpstreamSharedPtr bptr) : tcp_conn_pool_ptr_(ptr), tcp_upstream_ptr_(bptr) {}
   ~TcpConnPoolWrapper() = default;
 
   TcpConPoolSharedPtr tcp_conn_pool_ptr_{};
+  TcpUpstreamSharedPtr tcp_upstream_ptr_{};
   // anchor a string temporarily, make sure it won't be freed before copied to Go.
   std::string str_value_;
 };
