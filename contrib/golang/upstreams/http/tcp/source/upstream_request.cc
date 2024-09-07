@@ -158,22 +158,6 @@ void TcpUpstream::onUpstreamData(Buffer::Instance& data, bool end_stream) {
     upstream_request_->decodeData(data, end_stream);
     return;
   }
-
-  // ENVOY_LOG(debug, "onUpstreamData, end_stream: {}", end_stream);
-  // // end_stream = true;
-  // if (response_buffer_.length() == 0) {
-  //   if (data.length() < DUBBO_MAGIC_SIZE || data.peekBEInt<uint16_t>() != DUBBO_MAGIC_NUMBER) {
-  //     data.drain(data.length());
-  //     data.add(ProtocolErrorMessage);
-  //     upstream_request_->decodeData(data, end_stream);
-  //     return;
-  //   }
-  // }
-  // if (decodeDubboFrame(data) == DubboFrameDecodeStatus::Ok) {
-  //   uint32_t body_length_ = response_buffer_.peekBEInt<uint32_t>(DUBBO_LENGTH_OFFSET);
-  //   data.move(response_buffer_, body_length_ + DUBBO_HEADER_SIZE);
-  //   upstream_request_->decodeData(data, end_stream);
-  // }
 }
 
 DubboFrameDecodeStatus TcpUpstream::decodeDubboFrame(Buffer::Instance& data) {
@@ -211,10 +195,6 @@ void TcpUpstream::onBelowWriteBufferLowWatermark() {
 }
 
 void TcpUpstream::enableHalfClose(bool enabled) {
-  // if (closed_) {
-  //   ENVOY_LOG(warn, "connection has closed, addr: {}", addr_);
-  //   return;
-  // }
   ASSERT(upstream_conn_data_ != nullptr);
   upstream_conn_data_->connection().enableHalfClose(enabled);
   ENVOY_LOG(debug, "set enableHalfClose, enabled: {}, actualEnabled: {}", enabled, upstream_conn_data_->connection().isHalfCloseEnabled());
