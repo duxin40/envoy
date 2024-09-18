@@ -155,6 +155,9 @@ static_resources:
     #   typed_config:
     #     "@type": type.googleapis.com/envoy.extensions.upstreams.http.tcp.v3.TcpConnectionPoolProto
 
+    # for tcp conn pool multiplex
+    max_requests_per_connection: 10000000
+
     load_assignment:
       cluster_name: local_service
       endpoints:
