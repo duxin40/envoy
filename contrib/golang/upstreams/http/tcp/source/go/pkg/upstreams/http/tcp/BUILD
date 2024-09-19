@@ -8,8 +8,9 @@ go_library(
         "api.h",
         "capi_impl.go",
         "factory.go",
-        # "filter.go",
+        "filter.go",
         "shim.go",
+        "type.go",
     ],
     cgo = True,
     clinkopts = select({
