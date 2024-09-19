@@ -34,8 +34,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"fmt"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -62,9 +60,6 @@ var (
 	upstreamConnIDGenerator uint64
 
 	libraryID string
-
-	initialized      = true
-	envoyConcurrency uint32
 
 	initialized      = true
 	envoyConcurrency uint32
@@ -298,7 +293,6 @@ func envoyGoEncodeData(s *C.processState, endStream, buffer, length uint64) uint
 	// 	buf = append(buf, data...)
 	// }
 
-	if filter.EncodeData(buf, endStream == 1) {
 	if filter.EncodeData(buf, endStream == 1) {
 		return 1
 	} else {

@@ -87,45 +87,6 @@ private:
   RequestInternal* req_;
 };
 
-class TcpUpstream;
-
-// Go code only touch the fields in httpRequest
-class RequestInternal : public httpRequest {
-public:
-  RequestInternal(TcpUpstream& filter)
-      : decoding_state_(filter, this), encoding_state_(filter, this) {
-    configId = 0;
-  }
-
-  void setWeakFilter(std::weak_ptr<TcpUpstream> f) { filter_ = f; }
-  std::weak_ptr<TcpUpstream> weakFilter() { return filter_; }
-
-  DecodingProcessorState& decodingState() { return decoding_state_; }
-  EncodingProcessorState& encodingState() { return encoding_state_; }
-
-  // anchor a string temporarily, make sure it won't be freed before copied to Go.
-  std::string strValue;
-
-private:
-  std::weak_ptr<TcpUpstream> filter_;
-
-  // The state of the filter on both the encoding and decoding side.
-  DecodingProcessorState decoding_state_;
-  EncodingProcessorState encoding_state_;
-};
-
-// Wrapper HttpRequestInternal to DeferredDeletable.
-// Since we want keep httpRequest at the top of the HttpRequestInternal,
-// so, HttpRequestInternal can not inherit the virtual class DeferredDeletable.
-class RequestInternalWrapper : public Envoy::Event::DeferredDeletable {
-public:
-  RequestInternalWrapper(RequestInternal* req) : req_(req) {}
-  ~RequestInternalWrapper() override { delete req_; }
-
-private:
-  RequestInternal* req_;
-};
-
 class TcpConnPool : public Router::GenericConnPool,
                     public Envoy::Tcp::ConnectionPool::Callbacks,
                     public std::enable_shared_from_this<TcpConnPool>,
@@ -245,11 +206,6 @@ public:
   const StreamInfo::BytesMeterSharedPtr& bytesMeter() override { return bytes_meter_; }
 
   void enableHalfClose(bool enabled);
-
-  CAPIStatus copyBuffer(ProcessorState& state, Buffer::Instance* buffer, char* data);
-  CAPIStatus drainBuffer(ProcessorState& state, Buffer::Instance* buffer, uint64_t length);
-  CAPIStatus setBufferHelper(ProcessorState& state, Buffer::Instance* buffer,
-                             absl::string_view& value, bufferAction action);
 
   CAPIStatus copyBuffer(ProcessorState& state, Buffer::Instance* buffer, char* data);
   CAPIStatus drainBuffer(ProcessorState& state, Buffer::Instance* buffer, uint64_t length);

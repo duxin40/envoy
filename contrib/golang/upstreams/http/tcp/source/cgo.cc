@@ -46,12 +46,6 @@ absl::string_view stringViewFromGoPointer(void* p, int len) {
   return {static_cast<const char*>(p), static_cast<size_t>(len)};
 }
 
-// The returned absl::string_view only refer to Go memory,
-// should not use it after the current cgo call returns.
-absl::string_view stringViewFromGoPointer(void* p, int len) {
-  return {static_cast<const char*>(p), static_cast<size_t>(len)};
-}
-
 extern "C" {
 
 CAPIStatus envoyGoTcpUpstreamProcessStateHandlerWrapper(
@@ -133,36 +127,6 @@ CAPIStatus envoyGoTcpUpstreamSetBufferHelper(void* s, uint64_t buffer_ptr, void*
         return filter->setBufferHelper(state, buffer, value, action);
       });
 }
-
-CAPIStatus envoyGoTcpUpstreamGetBuffer(void* s, uint64_t buffer_ptr, void* data) {
-  return envoyGoTcpUpstreamProcessStateHandlerWrapper(
-      s, [buffer_ptr, data](std::shared_ptr<TcpUpstream>& filter, ProcessorState& state) -> CAPIStatus {
-        auto buffer = reinterpret_cast<Buffer::Instance*>(buffer_ptr);
-        return filter->copyBuffer(state, buffer, reinterpret_cast<char*>(data));
-      });
-}
-
-CAPIStatus envoyGoTcpUpstreamDrainBuffer(void* s, uint64_t buffer_ptr, uint64_t length) {
-  return envoyGoTcpUpstreamProcessStateHandlerWrapper(
-      s,
-      [buffer_ptr, length](std::shared_ptr<TcpUpstream>& filter, ProcessorState& state) -> CAPIStatus {
-        auto buffer = reinterpret_cast<Buffer::Instance*>(buffer_ptr);
-        return filter->drainBuffer(state, buffer, length);
-      });
-}
-
-CAPIStatus envoyGoTcpUpstreamSetBufferHelper(void* s, uint64_t buffer_ptr, void* data, int length,
-                                            bufferAction action) {
-  return envoyGoTcpUpstreamProcessStateHandlerWrapper(
-      s,
-      [buffer_ptr, data, length, action](std::shared_ptr<TcpUpstream>& filter,
-                                         ProcessorState& state) -> CAPIStatus {
-        auto buffer = reinterpret_cast<Buffer::Instance*>(buffer_ptr);
-        auto value = stringViewFromGoPointer(data, length);
-        return filter->setBufferHelper(state, buffer, value, action);
-      });
-}
-
 
 } // extern "C"
 } // namespace Golang

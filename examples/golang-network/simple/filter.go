@@ -27,22 +27,6 @@ import (
 	hessian "github.com/apache/dubbo-go-hessian2"
 	// "github.com/dubbogo/gost/log/logger"
 	// "mosn.io/htnn/api/pkg/filtermanager/api"
-
-	// "bytes"
-
-	// "dubbo.apache.org/dubbo-go/v3/protocol/dubbo/impl"
-
-	// "cgw.cestc.cn/gateway-control-plane/pkg/plugins/stream"
-
-	// "dubbo.apache.org/dubbo-go/v3/protocol"
-
-	dubbo2 "dubbo.apache.org/dubbo-go/v3/protocol/dubbo"
-	invocation2 "dubbo.apache.org/dubbo-go/v3/protocol/invocation"
-
-	// "encoding/json"
-	hessian "github.com/apache/dubbo-go-hessian2"
-	// "github.com/dubbogo/gost/log/logger"
-	// "mosn.io/htnn/api/pkg/filtermanager/api"
 )
 
 func init() {
@@ -68,19 +52,6 @@ type tcpUpstreamFilter struct {
 	api.EmptyTcpUpstreamFilter
 
 	cb api.ConnectionCallback
-}
-
-func (*tcpUpstreamFilter) OnPoolReady(cb api.ConnectionCallback) {
-	clusterName, _ := cb.StreamInfo().UpstreamClusterName()
-	fmt.Println("go-side get clusterName: %s", clusterName)
-	fmt.Println("go-side get routeName: %s", cb.StreamInfo().GetRouteName())
-
-	enableHalfClose := true
-	cb.EnableHalfClose(enableHalfClose)
-	fmt.Println("go-side set enableHalfClose: %+v", enableHalfClose)
-}
-
-func (*tcpUpstreamFilter) OnPoolFailure(poolFailureReason api.PoolFailureReason, transportFailureReason string) {
 }
 
 func (*tcpUpstreamFilter) EncodeData(buffer api.BufferInstance, endOfStream bool) bool {
