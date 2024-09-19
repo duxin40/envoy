@@ -140,6 +140,9 @@ CAPIStatus envoyGoFilterGetFilterState(void* wrapper, void* key, void* value);
 // tcp upstream
 CAPIStatus envoyGoTcpUpstreamInfo(void* u, int info_type, void* ret);
 CAPIStatus envoyGoTcpUpstreamConnEnableHalfClose(void* u, int enable_half_close);
+CAPIStatus envoyGoTcpUpstreamGetBuffer(void* s, uint64_t buffer, void* value);
+CAPIStatus envoyGoTcpUpstreamDrainBuffer(void* s, uint64_t buffer, uint64_t length);
+CAPIStatus envoyGoTcpUpstreamSetBufferHelper(void* s, uint64_t buffer, void* data, int length, bufferAction action);
 
 #ifdef __cplusplus
 } // extern "C"

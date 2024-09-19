@@ -201,16 +201,10 @@ public:
   virtual GoUint64 envoyGoOnTcpUpstreamConfig(GoUint64 library_id_ptr,
                                                       GoUint64 library_id_len, GoUint64 config_ptr,
                                                       GoUint64 config_len) PURE;
-  virtual GoUint64 envoyGoOnUpstreamConnectionReady(void* w, GoUint64 plugin_name_ptr, GoUint64 plugin_name_len,
-	GoUint64 config_id) PURE;
-  
-  virtual void envoyGoOnUpstreamConnectionFailure(void* w, GoUint64 reason, GoUint64 conn_id) PURE;
+  virtual GoUint64 envoyGoEncodeData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) PURE;
 
-  virtual GoUint64 envoyGoEncodeData(void* w, GoUint64 data_size, GoUint64 data_ptr, GoInt slice_num, GoInt end_of_stream) PURE;
+  virtual GoUint64 envoyGoOnUpstreamData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) PURE;
 
-  virtual GoUint64 envoyGoOnUpstreamData(void* w, GoUint64 data_size, GoUint64 data_ptr,
-                                           GoInt slice_num, GoInt end_of_stream) PURE;
-  virtual void envoyGoOnUpstreamEvent(void* w, GoInt event) PURE;
 };
 
 class TcpUpstreamDsoImpl : public TcpUpstreamDso {
@@ -221,33 +215,18 @@ public:
   GoUint64 envoyGoOnTcpUpstreamConfig(GoUint64 library_id_ptr, GoUint64 library_id_len,
                                               GoUint64 config_ptr, GoUint64 config_len) override;
 
-  GoUint64 envoyGoOnUpstreamConnectionReady(void* w, GoUint64 plugin_name_ptr, GoUint64 plugin_name_len,
-	GoUint64 config_id) override;
+  GoUint64 envoyGoEncodeData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) override;
 
-  void envoyGoOnUpstreamConnectionFailure(void* w, GoUint64 reason, GoUint64 conn_id) override;
-
-  GoUint64 envoyGoEncodeData(void* w, GoUint64 data_size, GoUint64 data_ptr, GoInt slice_num, GoInt end_of_stream) override;
-
-  GoUint64 envoyGoOnUpstreamData(void* w, GoUint64 data_size, GoUint64 data_ptr, GoInt slice_num,
-                                   GoInt end_of_stream) override;
-  void envoyGoOnUpstreamEvent(void* w, GoInt event) override;
+  GoUint64 envoyGoOnUpstreamData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) override;
 
 private:
   GoUint64 (*envoy_go_on_tcp_upstream_config_)(GoUint64 library_id_ptr,
                                                         GoUint64 library_id_len,
                                                         GoUint64 config_ptr,
                                                         GoUint64 config_len) = {nullptr};
-  GoUint64 (*envoy_go_on_upstream_connection_ready_)(void* w, GoUint64 plugin_name_ptr, GoUint64 plugin_name_len,
-                                            GoUint64 config_id) = {nullptr};
-
-  void (*envoy_go_on_upstream_connection_failure_)(void* w, GoUint64 reason, GoUint64 conn_id) = {nullptr};
-
-  GoUint64 (*envoy_go_on_encode_data_)(void* w, GoUint64 data_size, GoUint64 data_ptr,
-                                            GoInt slice_num, GoInt end_of_stream) = {nullptr};
+  GoUint64 (*envoy_go_on_encode_data_)(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) = {nullptr};
                                             
-  GoUint64 (*envoy_go_on_upstream_data_)(void* w, GoUint64 data_size, GoUint64 data_ptr,
-                                            GoInt slice_num, GoInt end_of_stream) = {nullptr};
-  void (*envoy_go_on_upstream_event_)(void* w, GoInt event) = {nullptr};
+  GoUint64 (*envoy_go_on_upstream_data_)(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) = {nullptr};
 };
 
 using TcpUpstreamDsoPtr = std::shared_ptr<TcpUpstreamDso>;

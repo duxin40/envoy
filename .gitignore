@@ -77,3 +77,4 @@ gdb-11.2.tar.gz
 go1.21.6.linux-amd64.tar.gz
 go1.21.6.linux-arm64.tar.gz
 examples/golang-http/simple/vendor/
+examples/golang-network/simple/vendor/

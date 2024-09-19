@@ -40,11 +40,31 @@ enum class ConnectionInfoType {
 	ConnectionInfoClusterName = 3,
 };
 
+// The returned absl::string_view only refer to Go memory,
+// should not use it after the current cgo call returns.
+absl::string_view stringViewFromGoPointer(void* p, int len) {
+  return {static_cast<const char*>(p), static_cast<size_t>(len)};
+}
+
 extern "C" {
+
+CAPIStatus envoyGoTcpUpstreamProcessStateHandlerWrapper(
+    void* s, std::function<CAPIStatus(std::shared_ptr<TcpUpstream>&, ProcessorState&)> f) {
+  auto state = static_cast<ProcessorState*>(reinterpret_cast<processState*>(s));
+  // if (!state->isProcessingInGo()) {
+  //   return CAPIStatus::CAPINotInGo;
+  // }
+  auto req = static_cast<RequestInternal*>(state->req);
+  auto weak_filter = req->weakFilter();
+  if (auto filter = weak_filter.lock()) {
+    return f(filter, *state);
+  }
+  return CAPIStatus::CAPIFilterIsGone;
+}
 
 CAPIStatus envoyGoTcpUpstreamInfo(void* u, int info_type, void* ret) {
   auto* wrapper = reinterpret_cast<TcpConnPoolWrapper*>(u);
-  TcpConPoolSharedPtr& pool_shared_ptr = wrapper->tcp_conn_pool_ptr_;
+  // TcpConPoolSharedPtr& pool_shared_ptr = wrapper->tcp_conn_pool_ptr_;
   TcpUpstreamSharedPtr& upstream_shared_ptr = wrapper->tcp_upstream_ptr_;
 
   // if (TcpConPoolSharedPtr uu = weak_ptr.lock()) {
@@ -54,7 +74,7 @@ CAPIStatus envoyGoTcpUpstreamInfo(void* u, int info_type, void* ret) {
     wrapper->str_value_ = upstream_shared_ptr->route_entry_->virtualHost().routeConfig().name();
     break;
   case ConnectionInfoType::ConnectionInfoClusterName:
-    wrapper->str_value_ = pool_shared_ptr->host()->cluster().name();
+    wrapper->str_value_ = upstream_shared_ptr->route_entry_->clusterName();
     break;
   default:
     PANIC_DUE_TO_CORRUPT_ENUM;
@@ -75,6 +95,35 @@ CAPIStatus envoyGoTcpUpstreamConnEnableHalfClose(void* u, int enable_half_close)
   upstream_shared_ptr->enableHalfClose(static_cast<bool>(enable_half_close));
 
   return CAPIOK;
+}
+
+CAPIStatus envoyGoTcpUpstreamGetBuffer(void* s, uint64_t buffer_ptr, void* data) {
+  return envoyGoTcpUpstreamProcessStateHandlerWrapper(
+      s, [buffer_ptr, data](std::shared_ptr<TcpUpstream>& filter, ProcessorState& state) -> CAPIStatus {
+        auto buffer = reinterpret_cast<Buffer::Instance*>(buffer_ptr);
+        return filter->copyBuffer(state, buffer, reinterpret_cast<char*>(data));
+      });
+}
+
+CAPIStatus envoyGoTcpUpstreamDrainBuffer(void* s, uint64_t buffer_ptr, uint64_t length) {
+  return envoyGoTcpUpstreamProcessStateHandlerWrapper(
+      s,
+      [buffer_ptr, length](std::shared_ptr<TcpUpstream>& filter, ProcessorState& state) -> CAPIStatus {
+        auto buffer = reinterpret_cast<Buffer::Instance*>(buffer_ptr);
+        return filter->drainBuffer(state, buffer, length);
+      });
+}
+
+CAPIStatus envoyGoTcpUpstreamSetBufferHelper(void* s, uint64_t buffer_ptr, void* data, int length,
+                                            bufferAction action) {
+  return envoyGoTcpUpstreamProcessStateHandlerWrapper(
+      s,
+      [buffer_ptr, data, length, action](std::shared_ptr<TcpUpstream>& filter,
+                                         ProcessorState& state) -> CAPIStatus {
+        auto buffer = reinterpret_cast<Buffer::Instance*>(buffer_ptr);
+        auto value = stringViewFromGoPointer(data, length);
+        return filter->setBufferHelper(state, buffer, value, action);
+      });
 }
 
 
