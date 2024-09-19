@@ -103,6 +103,11 @@ type TcpUpstreamCAPI interface {
 	UpstreamInfo(f unsafe.Pointer, infoType int) string
 	// UpstreamConnEnableHalfClose upstream conn EnableHalfClose
 	UpstreamConnEnableHalfClose(f unsafe.Pointer, enableHalfClose int)
+
+	HttpGetBuffer(s unsafe.Pointer, bufferPtr uint64, length uint64) []byte
+	HttpDrainBuffer(s unsafe.Pointer, bufferPtr uint64, length uint64)
+	HttpSetBufferHelper(s unsafe.Pointer, bufferPtr uint64, value string, action BufferAction)
+	HttpSetBytesBufferHelper(s unsafe.Pointer, bufferPtr uint64, value []byte, action BufferAction)
 }
 
 type CommonCAPI interface {

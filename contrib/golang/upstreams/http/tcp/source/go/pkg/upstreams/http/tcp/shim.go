@@ -32,10 +32,11 @@ package tcp
 import "C"
 import (
 	"errors"
+	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"unsafe"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -59,6 +60,9 @@ var (
 	upstreamConnIDGenerator uint64
 
 	libraryID string
+
+	initialized      = true
+	envoyConcurrency uint32
 )
 
 // wrap the UpstreamFilter to ensure that the runtime.finalizer can be triggered
@@ -66,6 +70,115 @@ var (
 type upstreamConnWrapper struct {
 	api.TcpUpstreamFilter
 	finalizer *int
+}
+
+var Requests = &requestMap{}
+
+type requestMap struct {
+	initOnce sync.Once
+	requests []map[*C.httpRequest]*httpRequest
+}
+
+func (f *requestMap) initialize(concurrency uint32) {
+	f.initOnce.Do(func() {
+		initialized = true
+		envoyConcurrency = concurrency
+		f.requests = make([]map[*C.httpRequest]*httpRequest, concurrency)
+		for i := uint32(0); i < concurrency; i++ {
+			f.requests[i] = map[*C.httpRequest]*httpRequest{}
+		}
+	})
+}
+
+func (f *requestMap) StoreReq(key *C.httpRequest, req *httpRequest) error {
+	m := f.requests[key.worker_id]
+	if _, ok := m[key]; ok {
+		return ErrDupRequestKey
+	}
+	m[key] = req
+	return nil
+}
+
+func (f *requestMap) GetReq(key *C.httpRequest) *httpRequest {
+	return f.requests[key.worker_id][key]
+}
+
+func (f *requestMap) DeleteReq(key *C.httpRequest) {
+	delete(f.requests[key.worker_id], key)
+}
+
+func (f *requestMap) Clear() {
+	for idx := range f.requests {
+		f.requests[idx] = map[*C.httpRequest]*httpRequest{}
+	}
+}
+
+func requestFinalize(r *httpRequest) {
+	r.Finalize(api.NormalFinalize)
+}
+
+func getOrCreateState(s *C.processState) *processState {
+	r := s.req
+	req := getRequest(r)
+	if req == nil {
+		req = createRequest(r)
+	}
+	if s.is_encoding == 0 {
+		if req.decodingState.processState == nil {
+			req.decodingState.processState = s
+		}
+		return &req.decodingState
+	}
+
+	// s.is_encoding == 1
+	if req.encodingState.processState == nil {
+		req.encodingState.processState = s
+	}
+	return &req.encodingState
+}
+
+func createRequest(r *C.httpRequest) *httpRequest {
+	req := &httpRequest{
+		req: r,
+	}
+	req.decodingState.request = req
+	req.encodingState.request = req
+	req.streamInfo.request = req
+
+	req.cond.L = &req.waitingLock
+	// NP: make sure filter will be deleted.
+	runtime.SetFinalizer(req, requestFinalize)
+
+	err := Requests.StoreReq(r, req)
+	if err != nil {
+		panic(fmt.Sprintf("createRequest failed, err: %s", err.Error()))
+	}
+
+	// configId := uint64(r.configId)
+
+	f := GetTcpUpstreamConfigFactory(req.pluginName())
+	filterFactory := f.CreateFactoryFromConfig("")
+	filter := filterFactory.CreateFilter()
+
+	// filterFactory, config := getHttpFilterFactoryAndConfig(req.pluginName(), configId)
+	// f := filterFactory(config, req)
+	req.httpFilter = filter
+
+	return req
+}
+
+func getRequest(r *C.httpRequest) *httpRequest {
+	return Requests.GetReq(r)
+}
+
+func getState(s *C.processState) *processState {
+	r := s.req
+	req := getRequest(r)
+	if s.is_encoding == 0 {
+		return &req.decodingState
+	}
+	// s.is_encoding == 1
+	return &req.encodingState
 }
 
 //export envoyGoOnTcpUpstreamConfig
@@ -81,61 +194,80 @@ func envoyGoOnTcpUpstreamConfig(libraryIDPtr uint64, libraryIDLen uint64, config
 	return configID
 }
 
-//export envoyGoOnUpstreamConnectionReady
-func envoyGoOnUpstreamConnectionReady(wrapper unsafe.Pointer, pluginNamePtr uint64, pluginNameLen uint64,
-	configID uint64) uint64 {
-	cb := &connectionCallback{
-		wrapper:                 wrapper,
-		writeFunc:               nil,
-		closeFunc:               nil,
-		infoFunc:                cgoAPI.UpstreamInfo,
-		connEnableHalfCloseFunc: cgoAPI.UpstreamConnEnableHalfClose,
-	}
-	pluginName := strings.Clone(utils.BytesToString(pluginNamePtr, pluginNameLen))
-	// pluginName := "simple-network"
-	f := GetTcpUpstreamConfigFactory(pluginName)
-	filterFactory := f.CreateFactoryFromConfig("")
-	filter := filterFactory.CreateFilter()
+// //export envoyGoOnUpstreamConnectionReady
+// func envoyGoOnUpstreamConnectionReady(wrapper unsafe.Pointer, pluginNamePtr uint64, pluginNameLen uint64,
+// 	configID uint64) uint64 {
+// 	cb := &connectionCallback{
+// 		wrapper:                 wrapper,
+// 		writeFunc:               nil,
+// 		closeFunc:               nil,
+// 		infoFunc:                cgoAPI.UpstreamInfo,
+// 		connEnableHalfCloseFunc: cgoAPI.UpstreamConnEnableHalfClose,
+// 	}
+// 	pluginName := strings.Clone(utils.BytesToString(pluginNamePtr, pluginNameLen))
+// 	// pluginName := "simple-network"
+// 	f := GetTcpUpstreamConfigFactory(pluginName)
+// 	filterFactory := f.CreateFactoryFromConfig("")
+// 	filter := filterFactory.CreateFilter()
 
-	// conn := &upstreamConnWrapper{
-	// 	TcpUpstreamFilter: filter,
-	// 	finalizer:         new(int),
-	// }
-	connID := atomic.AddUint64(&upstreamConnIDGenerator, 1)
-	_ = UpstreamFilters.StoreFilterByConnID(connID, filter)
+// 	// conn := &upstreamConnWrapper{
+// 	// 	TcpUpstreamFilter: filter,
+// 	// 	finalizer:         new(int),
+// 	// }
+// 	connID := atomic.AddUint64(&upstreamConnIDGenerator, 1)
+// 	_ = UpstreamFilters.StoreFilterByConnID(connID, filter)
 
-	// filter := UpstreamFilters.GetFilterByConnID(connID)
-	// UpstreamFilters.DeleteFilterByConnID(connID)
-	UpstreamFilters.StoreFilterByWrapper(uint64(uintptr(wrapper)), filter)
+// 	// filter := UpstreamFilters.GetFilterByConnID(connID)
+// 	// UpstreamFilters.DeleteFilterByConnID(connID)
+// 	UpstreamFilters.StoreFilterByWrapper(uint64(uintptr(wrapper)), filter)
 
-	filter.OnPoolReady(cb)
+// 	filter.OnPoolReady(cb)
 
-	return connID
-}
+// 	return connID
+// }
 
-//export envoyGoOnUpstreamConnectionFailure
-func envoyGoOnUpstreamConnectionFailure(wrapper unsafe.Pointer, reason int, connID uint64) {
-	filter := UpstreamFilters.GetFilterByConnID(connID)
-	UpstreamFilters.DeleteFilterByConnID(connID)
-	filter.OnPoolFailure(api.PoolFailureReason(reason), "")
-}
+// //export envoyGoOnUpstreamConnectionFailure
+// func envoyGoOnUpstreamConnectionFailure(wrapper unsafe.Pointer, reason int, connID uint64) {
+// 	filter := UpstreamFilters.GetFilterByConnID(connID)
+// 	UpstreamFilters.DeleteFilterByConnID(connID)
+// 	filter.OnPoolFailure(api.PoolFailureReason(reason), "")
+// }
 
 //export envoyGoEncodeData
-func envoyGoEncodeData(wrapper unsafe.Pointer, dataSize uint64, dataPtr uint64, sliceNum int, endOfStream int) uint64 {
-	filter := UpstreamFilters.GetFilterByWrapper(uint64(uintptr(wrapper)))
+func envoyGoEncodeData(s *C.processState, endStream, buffer, length uint64) uint64 {
+	state := getState(s)
 
-	var buf []byte
+	req := state.request
 
-	for i := 0; i < sliceNum; i++ {
-		slicePtr := dataPtr + uint64(i)*uint64(CULLSize+CULLSize)
-		sliceData := *((*uint64)(unsafe.Pointer(uintptr(slicePtr))))
-		sliceLen := *((*uint64)(unsafe.Pointer(uintptr(slicePtr) + CULLSize)))
+	// filter := UpstreamFilters.GetFilterByWrapper(uint64(uintptr(wrapper)))
+	filter := req.httpFilter
 
-		data := utils.BytesToSlice(sliceData, sliceLen)
-		buf = append(buf, data...)
+	// isDecode := state.Phase() == api.DecodeDataPhase
+
+	buf := &httpBuffer{
+		state:               state,
+		envoyBufferInstance: buffer,
+		length:              length,
 	}
 
-	if filter.EncodeData(buf, endOfStream == 1) {
+	// var status api.StatusType
+	// if isDecode {
+	// 	status = f.DecodeData(buf, endStream == 1)
+	// } else {
+	// 	status = f.EncodeData(buf, endStream == 1)
+	// }
+
+	// var buf []byte
+	// for i := 0; i < sliceNum; i++ {
+	// 	slicePtr := dataPtr + uint64(i)*uint64(CULLSize+CULLSize)
+	// 	sliceData := *((*uint64)(unsafe.Pointer(uintptr(slicePtr))))
+	// 	sliceLen := *((*uint64)(unsafe.Pointer(uintptr(slicePtr) + CULLSize)))
+
+	// 	data := utils.BytesToSlice(sliceData, sliceLen)
+	// 	buf = append(buf, data...)
+	// }
+
+	if filter.EncodeData(buf, endStream == 1) {
 		return 1
 	} else {
 		return 0
@@ -143,32 +275,70 @@ func envoyGoEncodeData(wrapper unsafe.Pointer, dataSize uint64, dataPtr uint64, 
 }
 
 //export envoyGoOnUpstreamData
-func envoyGoOnUpstreamData(wrapper unsafe.Pointer, dataSize uint64, dataPtr uint64, sliceNum int, endOfStream int) uint64 {
-	filter := UpstreamFilters.GetFilterByWrapper(uint64(uintptr(wrapper)))
+func envoyGoOnUpstreamData(s *C.processState, endStream, buffer, length uint64) uint64 {
+	// filter := UpstreamFilters.GetFilterByWrapper(uint64(uintptr(wrapper)))
 
-	var buf []byte
+	// var buf []byte
 
-	for i := 0; i < sliceNum; i++ {
-		slicePtr := dataPtr + uint64(i)*uint64(CULLSize+CULLSize)
-		sliceData := *((*uint64)(unsafe.Pointer(uintptr(slicePtr))))
-		sliceLen := *((*uint64)(unsafe.Pointer(uintptr(slicePtr) + CULLSize)))
+	// for i := 0; i < sliceNum; i++ {
+	// 	slicePtr := dataPtr + uint64(i)*uint64(CULLSize+CULLSize)
+	// 	sliceData := *((*uint64)(unsafe.Pointer(uintptr(slicePtr))))
+	// 	sliceLen := *((*uint64)(unsafe.Pointer(uintptr(slicePtr) + CULLSize)))
 
-		data := utils.BytesToSlice(sliceData, sliceLen)
-		buf = append(buf, data...)
+	// 	data := utils.BytesToSlice(sliceData, sliceLen)
+	// 	buf = append(buf, data...)
+	// }
+
+	state := getState(s)
+
+	req := state.request
+
+	// filter := UpstreamFilters.GetFilterByWrapper(uint64(uintptr(wrapper)))
+	filter := req.httpFilter
+
+	// isDecode := state.Phase() == api.DecodeDataPhase
+
+	buf := &httpBuffer{
+		state:               state,
+		envoyBufferInstance: buffer,
+		length:              length,
 	}
 
-	return uint64(filter.OnUpstreamData(buf, endOfStream == 1))
+	// var status api.StatusType
+	// if isDecode {
+	// 	status = f.DecodeData(buf, endStream == 1)
+	// } else {
+	// 	status = f.EncodeData(buf, endStream == 1)
+	// }
+
+	// var buf []byte
+	// for i := 0; i < sliceNum; i++ {
+	// 	slicePtr := dataPtr + uint64(i)*uint64(CULLSize+CULLSize)
+	// 	sliceData := *((*uint64)(unsafe.Pointer(uintptr(slicePtr))))
+	// 	sliceLen := *((*uint64)(unsafe.Pointer(uintptr(slicePtr) + CULLSize)))
+
+	// 	data := utils.BytesToSlice(sliceData, sliceLen)
+	// 	buf = append(buf, data...)
+	// }
+
+	// if filter.EncodeData(buf, endStream == 1) {
+	// 	return 1
+	// } else {
+	// 	return 0
+	// }
+
+	return uint64(filter.OnUpstreamData(buf, endStream == 1))
 }
 
-//export envoyGoOnUpstreamEvent
-func envoyGoOnUpstreamEvent(wrapper unsafe.Pointer, event int) {
-	filter := UpstreamFilters.GetFilterByWrapper(uint64(uintptr(wrapper)))
-	e := api.ConnectionEvent(event)
-	filter.OnEvent(e)
-	if e == api.LocalClose || e == api.RemoteClose {
-		UpstreamFilters.DeleteFilterByWrapper(uint64(uintptr(wrapper)))
-	}
-}
+// //export envoyGoOnUpstreamEvent
+// func envoyGoOnUpstreamEvent(wrapper unsafe.Pointer, event int) {
+// 	filter := UpstreamFilters.GetFilterByWrapper(uint64(uintptr(wrapper)))
+// 	e := api.ConnectionEvent(event)
+// 	filter.OnEvent(e)
+// 	if e == api.LocalClose || e == api.RemoteClose {
+// 		UpstreamFilters.DeleteFilterByWrapper(uint64(uintptr(wrapper)))
+// 	}
+// }
 
 type TcpUpstreamFilterMap struct {
 	idMap      sync.Map // upstreamConnID(uint) -> UpstreamFilter

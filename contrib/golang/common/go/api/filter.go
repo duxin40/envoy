@@ -331,28 +331,17 @@ type HistogramMetric interface {
 }
 
 type TcpUpstreamFilter interface {
-	// Called when a connection is available to process a request/response.
-	OnPoolReady(cb ConnectionCallback)
-	// Called when a pool error occurred and no connection could be acquired for making the request.
-	OnPoolFailure(poolFailureReason PoolFailureReason, transportFailureReason string)
 	// Invoked when data is delivered from the upstream connection.
-	EncodeData(buffer []byte, endOfStream bool) (EndStream bool)
+	EncodeData(buffer BufferInstance, endOfStream bool) (EndStream bool)
 	// Called when data is read on from tcp upstream.
-	OnUpstreamData(buffer []byte, endOfStream bool) UpstreamDataStatus
-	// Callback for connection events.
-	OnEvent(event ConnectionEvent)
+	OnUpstreamData(buffer BufferInstance, endOfStream bool) UpstreamDataStatus
 }
 
-func (*EmptyTcpUpstreamFilter) OnPoolReady(cb ConnectionCallback) {}
-
-func (*EmptyTcpUpstreamFilter) OnPoolFailure(poolFailureReason PoolFailureReason, transportFailureReason string) {
-}
-
-func (*EmptyTcpUpstreamFilter) EncodeData(buffer []byte, endOfStream bool) bool {
+func (*EmptyTcpUpstreamFilter) EncodeData(buffer BufferInstance, endOfStream bool) bool {
 	return true
 }
 
-func (*EmptyTcpUpstreamFilter) OnUpstreamData(buffer []byte, endOfStream bool) UpstreamDataStatus {
+func (*EmptyTcpUpstreamFilter) OnUpstreamData(buffer BufferInstance, endOfStream bool) UpstreamDataStatus {
 	return UpstreamDataFinish
 }
 

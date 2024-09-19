@@ -17,6 +17,7 @@
 #include "source/common/router/upstream_request.h"
 #include "source/common/stream_info/stream_info_impl.h"
 #include "source/extensions/upstreams/http/tcp/upstream_request.h"
+#include "processor_state.h"
 
 #include "contrib/golang/common/dso/dso.h"
 
@@ -45,6 +46,45 @@ constexpr absl::string_view ProtocolErrorMessage = "Not dubbo message";
 struct TcpConnPoolWrapper;
 
 struct TcpUpstreamWrapper;
+
+class TcpUpstream;
+
+// Go code only touch the fields in httpRequest
+class RequestInternal : public httpRequest {
+public:
+  RequestInternal(TcpUpstream& filter)
+      : decoding_state_(filter, this), encoding_state_(filter, this) {
+    configId = 0;
+  }
+
+  void setWeakFilter(std::weak_ptr<TcpUpstream> f) { filter_ = f; }
+  std::weak_ptr<TcpUpstream> weakFilter() { return filter_; }
+
+  DecodingProcessorState& decodingState() { return decoding_state_; }
+  EncodingProcessorState& encodingState() { return encoding_state_; }
+
+  // anchor a string temporarily, make sure it won't be freed before copied to Go.
+  std::string strValue;
+
+private:
+  std::weak_ptr<TcpUpstream> filter_;
+
+  // The state of the filter on both the encoding and decoding side.
+  DecodingProcessorState decoding_state_;
+  EncodingProcessorState encoding_state_;
+};
+
+// Wrapper HttpRequestInternal to DeferredDeletable.
+// Since we want keep httpRequest at the top of the HttpRequestInternal,
+// so, HttpRequestInternal can not inherit the virtual class DeferredDeletable.
+class RequestInternalWrapper : public Envoy::Event::DeferredDeletable {
+public:
+  RequestInternalWrapper(RequestInternal* req) : req_(req) {}
+  ~RequestInternalWrapper() override { delete req_; }
+
+private:
+  RequestInternal* req_;
+};
 
 class TcpConnPool : public Router::GenericConnPool,
                     public Envoy::Tcp::ConnectionPool::Callbacks,
@@ -113,8 +153,8 @@ public:
     upstream_handle_ = nullptr;
     callbacks_->onPoolFailure(reason, transport_failure_reason, host);
 
-    dynamic_lib_->envoyGoOnUpstreamConnectionFailure(wrapper_,
-    static_cast<int>(reason), go_conn_id_);         
+    // dynamic_lib_->envoyGoOnUpstreamConnectionFailure(wrapper_,
+    // static_cast<int>(reason), go_conn_id_);         
   }
 
   void onPoolReady(Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& conn_data,
@@ -123,14 +163,14 @@ public:
 private:
   uint64_t config_id_;
   std::string plugin_name_{};
-  uint64_t go_conn_id_;
+  // uint64_t go_conn_id_;
   absl::optional<Envoy::Upstream::TcpPoolData> conn_pool_data_;
   Envoy::Tcp::ConnectionPool::Cancellable* upstream_handle_{};
   Router::GenericConnectionPoolCallbacks* callbacks_{};
   Envoy::Tcp::ConnectionPool::ConnectionDataPtr upstream_conn_data_;
 
   Dso::TcpUpstreamDsoPtr dynamic_lib_;
-  TcpConnPoolWrapper* wrapper_{nullptr};
+  // TcpConnPoolWrapper* wrapper_{nullptr};
 };
 
 class TcpUpstream : public Router::GenericUpstream,
@@ -160,8 +200,13 @@ public:
 
   void enableHalfClose(bool enabled);
 
+  CAPIStatus copyBuffer(ProcessorState& state, Buffer::Instance* buffer, char* data);
+  CAPIStatus drainBuffer(ProcessorState& state, Buffer::Instance* buffer, uint64_t length);
+  CAPIStatus setBufferHelper(ProcessorState& state, Buffer::Instance* buffer,
+                             absl::string_view& value, bufferAction action);
+
   const Router::RouteEntry* route_entry_;
-  TcpConnPoolWrapper* wrapper_{nullptr};
+  // TcpConnPoolWrapper* wrapper_{nullptr};
 
 private:
   DubboFrameDecodeStatus decodeDubboFrame(Buffer::Instance& data);
@@ -173,6 +218,18 @@ private:
   StreamInfo::BytesMeterSharedPtr bytes_meter_{std::make_shared<StreamInfo::BytesMeter>()};
 
   Dso::TcpUpstreamDsoPtr dynamic_lib_;
+
+  RequestInternal* req_{nullptr};
+  // The state of the filter on both the encoding and decoding side.
+  // They are stored in HttpRequestInternal since Go need to read them,
+  // And it's safe to read them before onDestroy in C++ side.
+  EncodingProcessorState& encoding_state_;
+  DecodingProcessorState& decoding_state_;
+
+  // lock for has_destroyed_/etc, to avoid race between envoy c thread and go thread (when calling
+  // back from go).
+  Thread::MutexBasicLockable mutex_{};
+  bool has_destroyed_ ABSL_GUARDED_BY(mutex_){false};
 };
 
 using TcpConPoolSharedPtr = std::shared_ptr<TcpConnPool>;

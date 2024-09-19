@@ -189,28 +189,13 @@ extern void envoyGoFilterOnUpstreamEvent(void* f, GoInt event);
 extern GoUint64 envoyGoOnTcpUpstreamConfig(GoUint64 library_id_ptr, GoUint64 library_id_len,
                                                    GoUint64 config_ptr, GoUint64 config_len);
 
-// go:linkname envoyGoOnUpstreamConnectionReady
-// github.com/envoyproxy/envoy/contrib/golang/filters/upstreams/http/tcp/source/go/pkg/upstreams/http/tcp.envoyGoOnUpstreamConnectionReady
-extern GoUint64 envoyGoOnUpstreamConnectionReady(void* f, GoUint64 plugin_name_ptr, GoUint64 plugin_name_len,
-                                                        GoUint64 config_id);
-
-// go:linkname envoyGoOnUpstreamConnectionFailure
-// github.com/envoyproxy/envoy/contrib/golang/filters/upstreams/http/tcp/source/go/pkg/upstreams/http/tcp.envoyGoOnUpstreamConnectionFailure
-extern void envoyGoOnUpstreamConnectionFailure(void* f, GoUint64 reason, GoUint64 conn_id);
-
 // go:linkname envoyGoEncodeData
 // github.com/envoyproxy/envoy/contrib/golang/filters/upstreams/http/tcp/source/go/pkg/upstreams/http/tcp.envoyGoEncodeData
-extern GoUint64 envoyGoEncodeData(void* f, GoUint64 data_size, GoUint64 data_ptr, 
-                                        GoInt slice_num, GoInt end_of_stream);
+extern GoUint64 envoyGoEncodeData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len);
 
 // go:linkname envoyGoOnUpstreamData
 // github.com/envoyproxy/envoy/contrib/golang/filters/upstreams/http/tcp/source/go/pkg/upstreams/http/tcp.envoyGoOnUpstreamData
-extern GoUint64 envoyGoOnUpstreamData(void* f, GoUint64 data_size, GoUint64 data_ptr,
-                                            GoInt slice_num, GoInt end_of_stream);
-
-// go:linkname envoyGoOnUpstreamEvent
-// github.com/envoyproxy/envoy/contrib/golang/filters/upstreams/http/tcp/source/go/pkg/upstreams/http/tcp.envoyGoOnUpstreamEvent
-extern void envoyGoOnUpstreamEvent(void* f, GoInt event);
+extern GoUint64 envoyGoOnUpstreamData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len);
 
 #ifdef __cplusplus
 }
