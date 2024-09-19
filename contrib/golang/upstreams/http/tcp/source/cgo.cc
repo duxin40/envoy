@@ -15,31 +15,6 @@ namespace Golang {
 // thread.
 //
 
-// Deep copy GoString into std::string, including the string content,
-// it's safe to use it after the current cgo call returns.
-std::string copyGoString(void* str) {
-  if (str == nullptr) {
-    return "";
-  }
-  auto go_str = reinterpret_cast<GoString*>(str);
-  return std::string{go_str->p, size_t(go_str->n)};
-}
-
-// The returned absl::string_view only refer to the GoString, won't copy the string content into
-// C++, should not use it after the current cgo call returns.
-absl::string_view referGoString(void* str) {
-  if (str == nullptr) {
-    return "";
-  }
-  auto go_str = reinterpret_cast<GoString*>(str);
-  return {go_str->p, static_cast<size_t>(go_str->n)};
-}
-
-enum class ConnectionInfoType {
-  ConnectionInfoRouterName = 2,
-	ConnectionInfoClusterName = 3,
-};
-
 // The returned absl::string_view only refer to Go memory,
 // should not use it after the current cgo call returns.
 absl::string_view stringViewFromGoPointer(void* p, int len) {
@@ -51,9 +26,9 @@ extern "C" {
 CAPIStatus envoyGoTcpUpstreamProcessStateHandlerWrapper(
     void* s, std::function<CAPIStatus(std::shared_ptr<TcpUpstream>&, ProcessorState&)> f) {
   auto state = static_cast<ProcessorState*>(reinterpret_cast<processState*>(s));
-  // if (!state->isProcessingInGo()) {
-  //   return CAPIStatus::CAPINotInGo;
-  // }
+  if (!state->isProcessingInGo()) {
+    return CAPIStatus::CAPINotInGo;
+  }
   auto req = static_cast<RequestInternal*>(state->req);
   auto weak_filter = req->weakFilter();
   if (auto filter = weak_filter.lock()) {
@@ -62,39 +37,36 @@ CAPIStatus envoyGoTcpUpstreamProcessStateHandlerWrapper(
   return CAPIStatus::CAPIFilterIsGone;
 }
 
-CAPIStatus envoyGoTcpUpstreamInfo(void* u, int info_type, void* ret) {
-  auto* wrapper = reinterpret_cast<TcpConnPoolWrapper*>(u);
-  // TcpConPoolSharedPtr& pool_shared_ptr = wrapper->tcp_conn_pool_ptr_;
-  TcpUpstreamSharedPtr& upstream_shared_ptr = wrapper->tcp_upstream_ptr_;
-
-  // if (TcpConPoolSharedPtr uu = weak_ptr.lock()) {
-  auto* goStr = reinterpret_cast<GoString*>(ret);
-  switch (static_cast<ConnectionInfoType>(info_type)) {
-  case ConnectionInfoType::ConnectionInfoRouterName:
-    wrapper->str_value_ = upstream_shared_ptr->route_entry_->virtualHost().routeConfig().name();
-    break;
-  case ConnectionInfoType::ConnectionInfoClusterName:
-    wrapper->str_value_ = upstream_shared_ptr->route_entry_->clusterName();
-    break;
-  default:
-    PANIC_DUE_TO_CORRUPT_ENUM;
+CAPIStatus envoyGoTcpUpstreamHandlerWrapper(void* r,
+                                       std::function<CAPIStatus(std::shared_ptr<TcpUpstream>&)> f) {
+  auto req = reinterpret_cast<RequestInternal*>(r);
+  auto weak_filter = req->weakFilter();
+  if (auto filter = weak_filter.lock()) {
+    // Though it's memory safe without this limitation.
+    // But it's not a good idea to run Go code after continue back to Envoy C++,
+    // so, add this limitation.
+    if (!filter->isProcessingInGo()) {
+      return CAPIStatus::CAPINotInGo;
+    }
+    return f(filter);
   }
-
-  goStr->p = wrapper->str_value_.data();
-  goStr->n = wrapper->str_value_.length();
-  return CAPIStatus::CAPIOK;
-  // }
-  
   return CAPIStatus::CAPIFilterIsGone;
 }
 
-CAPIStatus envoyGoTcpUpstreamConnEnableHalfClose(void* u, int enable_half_close) {
-  auto* wrapper = reinterpret_cast<TcpConnPoolWrapper*>(u);
-  TcpUpstreamSharedPtr& upstream_shared_ptr = wrapper->tcp_upstream_ptr_;
+void envoyGoTcpUpstreamFinalize(void* r, int reason) {
+  UNREFERENCED_PARAMETER(reason);
+  // req is used by go, so need to use raw memory and then it is safe to release at the gc finalize
+  // phase of the go object.
+  auto req = reinterpret_cast<RequestInternal*>(r);
+  // TODO defer delete req
+  delete req;
+}
 
-  upstream_shared_ptr->enableHalfClose(static_cast<bool>(enable_half_close));
-
-  return CAPIOK;
+void envoyGoConfigTcpUpstreamFinalize(void* c) {
+  // config is used by go, so need to use raw memory and then it is safe to release at the gc
+  // finalize phase of the go object.
+  auto config = reinterpret_cast<HttpConfigInternal*>(c);
+  delete config;
 }
 
 CAPIStatus envoyGoTcpUpstreamGetBuffer(void* s, uint64_t buffer_ptr, void* data) {
@@ -126,6 +98,20 @@ CAPIStatus envoyGoTcpUpstreamSetBufferHelper(void* s, uint64_t buffer_ptr, void*
       });
 }
 
+CAPIStatus envoyGoTcpUpstreamGetStringValue(void* r, int id, uint64_t* value_data, int* value_len) {
+  return envoyGoTcpUpstreamHandlerWrapper(
+      r, [id, value_data, value_len](std::shared_ptr<TcpUpstream>& filter) -> CAPIStatus {
+        return filter->getStringValue(id, value_data, value_len);
+      });
+}
+
+CAPIStatus envoyGoTcpUpstreamConnEnableHalfClose(void* r, int enabled) {
+  return envoyGoTcpUpstreamHandlerWrapper(
+      r, [enabled](std::shared_ptr<TcpUpstream>& filter) -> CAPIStatus {
+        filter->enableHalfClose(enabled == 0 ? false:true);
+        return CAPIOK;
+      });
+}
 
 } // extern "C"
 } // namespace Golang

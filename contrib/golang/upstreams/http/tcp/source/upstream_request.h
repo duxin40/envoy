@@ -18,6 +18,7 @@
 #include "source/common/stream_info/stream_info_impl.h"
 #include "source/extensions/upstreams/http/tcp/upstream_request.h"
 #include "processor_state.h"
+#include "processor_state.h"
 
 #include "contrib/golang/common/dso/dso.h"
 
@@ -31,23 +32,48 @@ namespace Http {
 namespace Tcp {
 namespace Golang {
 
-enum class DubboFrameDecodeStatus : uint8_t {
-  Ok = 0,
-  NeedMoreData = 1,
-  InvalidHeader = 2,
+class TcpUpstream;
+
+class FilterConfig;
+
+struct HttpConfigInternal : httpConfig {
+  std::weak_ptr<FilterConfig> config_;
+  HttpConfigInternal(std::weak_ptr<FilterConfig> c) { config_ = c; }
+  std::weak_ptr<FilterConfig> weakFilterConfig() { return config_; }
 };
 
-constexpr uint64_t DUBBO_HEADER_SIZE = 16;
-constexpr uint64_t DUBBO_MAGIC_SIZE = 2;
-constexpr uint16_t DUBBO_MAGIC_NUMBER = 0xdabb;
-constexpr uint64_t DUBBO_LENGTH_OFFSET = 12;
-constexpr absl::string_view ProtocolErrorMessage = "Not dubbo message";
+using FilterConfigSharedPtr = std::shared_ptr<FilterConfig>;
 
-struct TcpConnPoolWrapper;
+/**
+ * Configuration for the HTTP golang extension filter.
+ */
+class FilterConfig : public std::enable_shared_from_this<FilterConfig>,
+                     Logger::Loggable<Logger::Id::http> {
+public:
+  FilterConfig(const envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config proto_config,
+   Dso::TcpUpstreamDsoPtr dso_lib);
+  ~FilterConfig();
 
-struct TcpUpstreamWrapper;
+  const std::string& soId() const { return so_id_; }
+  const std::string& soPath() const { return so_path_; }
+  const std::string& pluginName() const { return plugin_name_; }
+  uint64_t getConfigId() { return config_id_; };
 
-class TcpUpstream;
+  void newGoPluginConfig();
+
+private:
+  const std::string plugin_name_;
+  const std::string so_id_;
+  const std::string so_path_;
+  const ProtobufWkt::Any plugin_config_;
+
+  Dso::TcpUpstreamDsoPtr dso_lib_;
+  uint64_t config_id_{0};
+  // TODO(StarryVae): use rwlock.
+  Thread::MutexBasicLockable mutex_{};
+  // filter level config is created in C++ side, and freed by Golang GC finalizer.
+  HttpConfigInternal* config_{nullptr};
+};
 
 // Go code only touch the fields in httpRequest
 class RequestInternal : public httpRequest {
@@ -92,42 +118,7 @@ class TcpConnPool : public Router::GenericConnPool,
                     Logger::Loggable<Logger::Id::golang> {
 public:
   TcpConnPool(Upstream::ThreadLocalCluster& thread_local_cluster,
-              Upstream::ResourcePriority priority, Upstream::LoadBalancerContext* ctx, const Protobuf::Message& config) {
-    conn_pool_data_ = thread_local_cluster.tcpConnPool(priority, ctx);
-
-    envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config c;
-    
-    ProtobufWkt::Any any;
-    any.ParseFromString(config.SerializeAsString());
-    ENVOY_LOG(debug, "get cluster any value: {}", any.value());
-
-    auto s = c.ParseFromString(any.value());
-    ASSERT(s, "any.value() ParseFromString should always successful");
-
-    std::string config_str;
-    auto res = c.plugin_config().SerializeToString(&config_str);
-    ASSERT(res, "plugin_config SerializeToString should always successful");
-
-    ENVOY_LOG(debug, "load tcp_upstream_golang library at parse config: {} {}", c.library_id(), c.library_path());
-
-    // loads DSO store a static map and a open handles leak will occur when the filter gets loaded and
-    // unloaded.
-    // TODO: unload DSO when filter updated.
-    auto dso_lib = Dso::DsoManager<Dso::TcpUpstreamDsoImpl>::load(c.library_id(), c.library_path(), c.plugin_name());
-    if (dso_lib == nullptr) {
-      throw EnvoyException(fmt::format("tcp_upstream_golang: load library failed: {} {}", c.library_id(), c.library_path()));
-    };
-
-    dynamic_lib_ = dso_lib;
-
-    config_ = c;
-    if (dynamic_lib_) {
-      config_id_ = dynamic_lib_->envoyGoOnTcpUpstreamConfig(reinterpret_cast<unsigned long long>(c.library_id().data()), c.library_id().length(),
-     reinterpret_cast<unsigned long long>(config_str.data()), config_str.length());
-    }
-    plugin_name_ = c.plugin_name();
-
-  }
+              Upstream::ResourcePriority priority, Upstream::LoadBalancerContext* ctx, const Protobuf::Message& config);
   void newStream(Router::GenericConnectionPoolCallbacks* callbacks) override {
     callbacks_ = callbacks;
     upstream_handle_ = conn_pool_data_.value().newConnection(*this);
@@ -153,26 +144,44 @@ public:
                      Upstream::HostDescriptionConstSharedPtr host) override {
     upstream_handle_ = nullptr;
     callbacks_->onPoolFailure(reason, transport_failure_reason, host);
-
-    // dynamic_lib_->envoyGoOnUpstreamConnectionFailure(wrapper_,
-    // static_cast<int>(reason), go_conn_id_);         
   }
 
   void onPoolReady(Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& conn_data,
                    Upstream::HostDescriptionConstSharedPtr host) override;
 
 private:
-  uint64_t config_id_;
   std::string plugin_name_{};
-  // uint64_t go_conn_id_;
   absl::optional<Envoy::Upstream::TcpPoolData> conn_pool_data_;
   Envoy::Tcp::ConnectionPool::Cancellable* upstream_handle_{};
   Router::GenericConnectionPoolCallbacks* callbacks_{};
   Envoy::Tcp::ConnectionPool::ConnectionDataPtr upstream_conn_data_;
 
   Dso::TcpUpstreamDsoPtr dynamic_lib_;
-  envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config config_;
-  // TcpConnPoolWrapper* wrapper_{nullptr};
+  FilterConfigSharedPtr config_;
+};
+
+enum class EndStreamType {
+	NotEndStream,
+	EndStream,
+};
+
+enum class UpstreamDataStatus {
+	// Continue to deal with further data.
+	UpstreamDataContinue,
+	// Finish dealing with data.
+	UpstreamDataFinish,
+	// Failure when dealing with data.
+	UpstreamDataFailure,
+};
+
+enum class DestroyReason {
+  Normal,
+  Terminate,
+};
+
+enum class EnvoyValue {
+  RouteName = 1,
+  ClusterName,
 };
 
 class TcpUpstream : public Router::GenericUpstream,
@@ -182,14 +191,15 @@ class TcpUpstream : public Router::GenericUpstream,
 public:
   TcpUpstream(Router::UpstreamToDownstream* upstream_request,
               Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& upstream, Dso::TcpUpstreamDsoPtr dynamic_lib,
-              envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config config);
+              FilterConfigSharedPtr config);
+  ~TcpUpstream() override;
 
   // GenericUpstream
   void encodeData(Buffer::Instance& data, bool end_stream) override;
   void encodeMetadata(const Envoy::Http::MetadataMapVector&) override {}
   Envoy::Http::Status encodeHeaders(const Envoy::Http::RequestHeaderMap& headers, bool end_stream) override;
   void encodeTrailers(const Envoy::Http::RequestTrailerMap&) override;
-  void enableHalfClose() override;
+  void enableHalfClose() override {upstream_conn_data_->connection().enableHalfClose(true);};
   void readDisable(bool disable) override;
   void resetStream() override;
   void setAccount(Buffer::BufferMemoryAccountSharedPtr) override {}
@@ -201,18 +211,22 @@ public:
   void onBelowWriteBufferLowWatermark() override;
   const StreamInfo::BytesMeterSharedPtr& bytesMeter() override { return bytes_meter_; }
 
-  void enableHalfClose(bool enabled);
-
   CAPIStatus copyBuffer(ProcessorState& state, Buffer::Instance* buffer, char* data);
   CAPIStatus drainBuffer(ProcessorState& state, Buffer::Instance* buffer, uint64_t length);
   CAPIStatus setBufferHelper(ProcessorState& state, Buffer::Instance* buffer,
                              absl::string_view& value, bufferAction action);
 
+  CAPIStatus getStringValue(int id, uint64_t* value_data, int* value_len);
+
+  void enableHalfClose(bool enabled);
+
+  bool isProcessingInGo() {
+  return decoding_state_.isProcessingInGo() || encoding_state_.isProcessingInGo();
+  }
+
   const Router::RouteEntry* route_entry_;
-  // TcpConnPoolWrapper* wrapper_{nullptr};
 
 private:
-  DubboFrameDecodeStatus decodeDubboFrame(Buffer::Instance& data);
   // return true when it is first inited.
   bool initRequest();
 
@@ -224,34 +238,14 @@ private:
 
   Dso::TcpUpstreamDsoPtr dynamic_lib_;
 
-  envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config config_;
+  FilterConfigSharedPtr config_;
 
   RequestInternal* req_{nullptr};
-  // The state of the filter on both the encoding and decoding side.
-  // They are stored in HttpRequestInternal since Go need to read them,
-  // And it's safe to read them before onDestroy in C++ side.
+
   EncodingProcessorState& encoding_state_;
   DecodingProcessorState& decoding_state_;
-
-  // lock for has_destroyed_/etc, to avoid race between envoy c thread and go thread (when calling
-  // back from go).
-  Thread::MutexBasicLockable mutex_{};
-  bool has_destroyed_ ABSL_GUARDED_BY(mutex_){false};
 };
 
-using TcpConPoolSharedPtr = std::shared_ptr<TcpConnPool>;
-using TcpUpstreamSharedPtr = std::shared_ptr<TcpUpstream>;
-
-struct TcpConnPoolWrapper {
-public:
-  TcpConnPoolWrapper(TcpConPoolSharedPtr ptr, TcpUpstreamSharedPtr bptr) : tcp_conn_pool_ptr_(ptr), tcp_upstream_ptr_(bptr) {}
-  ~TcpConnPoolWrapper() = default;
-
-  TcpConPoolSharedPtr tcp_conn_pool_ptr_{};
-  TcpUpstreamSharedPtr tcp_upstream_ptr_{};
-  // anchor a string temporarily, make sure it won't be freed before copied to Go.
-  std::string str_value_;
-};
 
 
 } // namespace Golang
