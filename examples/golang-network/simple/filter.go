@@ -54,19 +54,6 @@ type tcpUpstreamFilter struct {
 	cb api.ConnectionCallback
 }
 
-func (*tcpUpstreamFilter) OnPoolReady(cb api.ConnectionCallback) {
-	clusterName, _ := cb.StreamInfo().UpstreamClusterName()
-	fmt.Println("go-side get clusterName: %s", clusterName)
-	fmt.Println("go-side get routeName: %s", cb.StreamInfo().GetRouteName())
-
-	enableHalfClose := true
-	cb.EnableHalfClose(enableHalfClose)
-	fmt.Println("go-side set enableHalfClose: %+v", enableHalfClose)
-}
-
-func (*tcpUpstreamFilter) OnPoolFailure(poolFailureReason api.PoolFailureReason, transportFailureReason string) {
-}
-
 func (*tcpUpstreamFilter) EncodeData(buffer api.BufferInstance, endOfStream bool) bool {
 	fmt.Println("[http2rpc][DecodeData] start")
 
