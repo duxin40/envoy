@@ -18,6 +18,7 @@
 #include "source/common/stream_info/stream_info_impl.h"
 #include "source/extensions/upstreams/http/tcp/upstream_request.h"
 #include "processor_state.h"
+#include "processor_state.h"
 
 #include "contrib/golang/common/dso/dso.h"
 
@@ -46,6 +47,45 @@ constexpr absl::string_view ProtocolErrorMessage = "Not dubbo message";
 struct TcpConnPoolWrapper;
 
 struct TcpUpstreamWrapper;
+
+class TcpUpstream;
+
+// Go code only touch the fields in httpRequest
+class RequestInternal : public httpRequest {
+public:
+  RequestInternal(TcpUpstream& filter)
+      : decoding_state_(filter, this), encoding_state_(filter, this) {
+    configId = 0;
+  }
+
+  void setWeakFilter(std::weak_ptr<TcpUpstream> f) { filter_ = f; }
+  std::weak_ptr<TcpUpstream> weakFilter() { return filter_; }
+
+  DecodingProcessorState& decodingState() { return decoding_state_; }
+  EncodingProcessorState& encodingState() { return encoding_state_; }
+
+  // anchor a string temporarily, make sure it won't be freed before copied to Go.
+  std::string strValue;
+
+private:
+  std::weak_ptr<TcpUpstream> filter_;
+
+  // The state of the filter on both the encoding and decoding side.
+  DecodingProcessorState decoding_state_;
+  EncodingProcessorState encoding_state_;
+};
+
+// Wrapper HttpRequestInternal to DeferredDeletable.
+// Since we want keep httpRequest at the top of the HttpRequestInternal,
+// so, HttpRequestInternal can not inherit the virtual class DeferredDeletable.
+class RequestInternalWrapper : public Envoy::Event::DeferredDeletable {
+public:
+  RequestInternalWrapper(RequestInternal* req) : req_(req) {}
+  ~RequestInternalWrapper() override { delete req_; }
+
+private:
+  RequestInternal* req_;
+};
 
 class TcpUpstream;
 
@@ -156,6 +196,8 @@ public:
 
     // dynamic_lib_->envoyGoOnUpstreamConnectionFailure(wrapper_,
     // static_cast<int>(reason), go_conn_id_);         
+    // dynamic_lib_->envoyGoOnUpstreamConnectionFailure(wrapper_,
+    // static_cast<int>(reason), go_conn_id_);         
   }
 
   void onPoolReady(Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& conn_data,
@@ -164,6 +206,7 @@ public:
 private:
   uint64_t config_id_;
   std::string plugin_name_{};
+  // uint64_t go_conn_id_;
   // uint64_t go_conn_id_;
   absl::optional<Envoy::Upstream::TcpPoolData> conn_pool_data_;
   Envoy::Tcp::ConnectionPool::Cancellable* upstream_handle_{};
@@ -208,7 +251,13 @@ public:
   CAPIStatus setBufferHelper(ProcessorState& state, Buffer::Instance* buffer,
                              absl::string_view& value, bufferAction action);
 
+  CAPIStatus copyBuffer(ProcessorState& state, Buffer::Instance* buffer, char* data);
+  CAPIStatus drainBuffer(ProcessorState& state, Buffer::Instance* buffer, uint64_t length);
+  CAPIStatus setBufferHelper(ProcessorState& state, Buffer::Instance* buffer,
+                             absl::string_view& value, bufferAction action);
+
   const Router::RouteEntry* route_entry_;
+  // TcpConnPoolWrapper* wrapper_{nullptr};
   // TcpConnPoolWrapper* wrapper_{nullptr};
 
 private:

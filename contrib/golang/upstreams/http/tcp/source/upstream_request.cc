@@ -31,9 +31,14 @@ void TcpConnPool::onPoolReady(Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& co
       std::make_shared<TcpUpstream>(&callbacks_->upstreamToDownstream(), std::move(conn_data), dynamic_lib_, config_);
 
   // wrapper_ = new TcpConnPoolWrapper(shared_from_this(), upstream);
+  // wrapper_ = new TcpConnPoolWrapper(shared_from_this(), upstream);
 
   // upstream->wrapper_ = wrapper_;
+  // upstream->wrapper_ = wrapper_;
 
+  // go_conn_id_ = dynamic_lib_->envoyGoOnUpstreamConnectionReady(wrapper_,
+  //  reinterpret_cast<unsigned long long>(plugin_name_.data()), plugin_name_.length(),
+  //     config_id_);
   // go_conn_id_ = dynamic_lib_->envoyGoOnUpstreamConnectionReady(wrapper_,
   //  reinterpret_cast<unsigned long long>(plugin_name_.data()), plugin_name_.length(),
   //     config_id_);
@@ -91,11 +96,16 @@ void TcpUpstream::encodeData(Buffer::Instance& data, bool end_stream) {
 
   GoUint64 if_end_stream = dynamic_lib_->envoyGoEncodeData(
     s, end_stream ? 1 : 0, reinterpret_cast<uint64_t>(&buffer), buffer.length());
+  GoUint64 if_end_stream = dynamic_lib_->envoyGoEncodeData(
+    s, end_stream ? 1 : 0, reinterpret_cast<uint64_t>(&buffer), buffer.length());
   if (if_end_stream == 0) {
     end_stream = false;
   } else {
     end_stream = true;
   }
+  state.setFilterState(FilterState::Done);
+
+  state.doDataList.moveOut(data);
   state.setFilterState(FilterState::Done);
 
   state.doDataList.moveOut(data);
@@ -183,6 +193,35 @@ void TcpUpstream::onUpstreamData(Buffer::Instance& data, bool end_stream) {
   // }
 
   state.setFilterState(FilterState::ProcessingData);
+  // Buffer::RawSliceVector slice_vector = data.getRawSlices();
+  // int slice_num = slice_vector.size();
+  // unsigned long long* slices = new unsigned long long[2 * slice_num];
+  // for (int i = 0; i < slice_num; i++) {
+  //   const Buffer::RawSlice& s = slice_vector[i];
+  //   slices[2 * i] = reinterpret_cast<unsigned long long>(s.mem_);
+  //   slices[2 * i + 1] = s.len_;
+  // }
+
+  ProcessorState& state = decoding_state_;
+  Buffer::Instance& buffer = state.doDataList.push(data);
+  auto s = dynamic_cast<processState*>(&state);
+
+  // Buffer::RawSliceVector slice_vector = data.getRawSlices();
+  // int slice_num = slice_vector.size();
+  // unsigned long long* slices = new unsigned long long[2 * slice_num];
+  // for (int i = 0; i < slice_num; i++) {
+  //   const Buffer::RawSlice& s = slice_vector[i];
+  //   slices[2 * i] = reinterpret_cast<unsigned long long>(s.mem_);
+  //   slices[2 * i + 1] = s.len_;
+  // }
+
+  state.setFilterState(FilterState::ProcessingData);
+
+  GoUint64 status = dynamic_lib_->envoyGoOnUpstreamData(
+    s, end_stream ? 1 : 0, reinterpret_cast<uint64_t>(&buffer), buffer.length());
+
+  state.setFilterState(FilterState::Done);
+  state.doDataList.moveOut(data);
 
   GoUint64 status = dynamic_lib_->envoyGoOnUpstreamData(
     s, end_stream ? 1 : 0, reinterpret_cast<uint64_t>(&buffer), buffer.length());
@@ -221,6 +260,7 @@ DubboFrameDecodeStatus TcpUpstream::decodeDubboFrame(Buffer::Instance& data) {
 
 void TcpUpstream::onEvent(Network::ConnectionEvent event) {
   // dynamic_lib_->envoyGoOnUpstreamEvent(wrapper_, static_cast<int>(event));
+  // dynamic_lib_->envoyGoOnUpstreamEvent(wrapper_, static_cast<int>(event));
 
   if (event != Network::ConnectionEvent::Connected && upstream_request_) {
     upstream_request_->onResetStream(Envoy::Http::StreamResetReason::ConnectionTermination, "");
@@ -243,6 +283,77 @@ void TcpUpstream::enableHalfClose(bool enabled) {
   ASSERT(upstream_conn_data_ != nullptr);
   upstream_conn_data_->connection().enableHalfClose(enabled);
   ENVOY_LOG(debug, "set enableHalfClose, enabled: {}, actualEnabled: {}", enabled, upstream_conn_data_->connection().isHalfCloseEnabled());
+}
+
+CAPIStatus TcpUpstream::copyBuffer(ProcessorState& state, Buffer::Instance* buffer, char* data) {
+  // lock until this function return since it may running in a Go thread.
+  Thread::LockGuard lock(mutex_);
+  if (has_destroyed_) {
+    ENVOY_LOG(debug, "golang filter has been destroyed");
+    return CAPIStatus::CAPIFilterIsDestroy;
+  }
+  if (!state.isProcessingInGo()) {
+    ENVOY_LOG(debug, "golang filter is not processing Go");
+    return CAPIStatus::CAPINotInGo;
+  }
+  if (!state.doDataList.checkExisting(buffer)) {
+    ENVOY_LOG(debug, "invoking cgo api at invalid state: {}", __func__);
+    return CAPIStatus::CAPIInvalidPhase;
+  }
+  for (const Buffer::RawSlice& slice : buffer->getRawSlices()) {
+    // data is the heap memory of go, and the length is the total length of buffer. So use memcpy is
+    // safe.
+    memcpy(data, static_cast<const char*>(slice.mem_), slice.len_); // NOLINT(safe-memcpy)
+    data += slice.len_;
+  }
+  return CAPIStatus::CAPIOK;
+}
+
+CAPIStatus TcpUpstream::drainBuffer(ProcessorState& state, Buffer::Instance* buffer, uint64_t length) {
+  // lock until this function return since it may running in a Go thread.
+  Thread::LockGuard lock(mutex_);
+  if (has_destroyed_) {
+    ENVOY_LOG(debug, "golang filter has been destroyed");
+    return CAPIStatus::CAPIFilterIsDestroy;
+  }
+  if (!state.isProcessingInGo()) {
+    ENVOY_LOG(debug, "golang filter is not processing Go");
+    return CAPIStatus::CAPINotInGo;
+  }
+  if (!state.doDataList.checkExisting(buffer)) {
+    ENVOY_LOG(debug, "invoking cgo api at invalid state: {}", __func__);
+    return CAPIStatus::CAPIInvalidPhase;
+  }
+
+  buffer->drain(length);
+  return CAPIStatus::CAPIOK;
+}
+
+CAPIStatus TcpUpstream::setBufferHelper(ProcessorState& state, Buffer::Instance* buffer,
+                                   absl::string_view& value, bufferAction action) {
+  // lock until this function return since it may running in a Go thread.
+  Thread::LockGuard lock(mutex_);
+  if (has_destroyed_) {
+    ENVOY_LOG(debug, "golang filter has been destroyed");
+    return CAPIStatus::CAPIFilterIsDestroy;
+  }
+  if (!state.isProcessingInGo()) {
+    ENVOY_LOG(debug, "golang filter is not processing Go");
+    return CAPIStatus::CAPINotInGo;
+  }
+  if (!state.doDataList.checkExisting(buffer)) {
+    ENVOY_LOG(debug, "invoking cgo api at invalid state: {}", __func__);
+    return CAPIStatus::CAPIInvalidPhase;
+  }
+  if (action == bufferAction::Set) {
+    buffer->drain(buffer->length());
+    buffer->add(value);
+  } else if (action == bufferAction::Prepend) {
+    buffer->prepend(value);
+  } else {
+    buffer->add(value);
+  }
+  return CAPIStatus::CAPIOK;
 }
 
 CAPIStatus TcpUpstream::copyBuffer(ProcessorState& state, Buffer::Instance* buffer, char* data) {

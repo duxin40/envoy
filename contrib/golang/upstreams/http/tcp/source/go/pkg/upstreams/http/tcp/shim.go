@@ -34,6 +34,8 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -60,6 +62,9 @@ var (
 	upstreamConnIDGenerator uint64
 
 	libraryID string
+
+	initialized      = true
+	envoyConcurrency uint32
 
 	initialized      = true
 	envoyConcurrency uint32
@@ -199,7 +204,28 @@ func envoyGoOnTcpUpstreamConfig(libraryIDPtr uint64, libraryIDLen uint64, config
 // 	f := GetTcpUpstreamConfigFactory(pluginName)
 // 	filterFactory := f.CreateFactoryFromConfig("")
 // 	filter := filterFactory.CreateFilter()
+// //export envoyGoOnUpstreamConnectionReady
+// func envoyGoOnUpstreamConnectionReady(wrapper unsafe.Pointer, pluginNamePtr uint64, pluginNameLen uint64,
+// 	configID uint64) uint64 {
+// 	cb := &connectionCallback{
+// 		wrapper:                 wrapper,
+// 		writeFunc:               nil,
+// 		closeFunc:               nil,
+// 		infoFunc:                cgoAPI.UpstreamInfo,
+// 		connEnableHalfCloseFunc: cgoAPI.UpstreamConnEnableHalfClose,
+// 	}
+// 	pluginName := strings.Clone(utils.BytesToString(pluginNamePtr, pluginNameLen))
+// 	// pluginName := "simple-network"
+// 	f := GetTcpUpstreamConfigFactory(pluginName)
+// 	filterFactory := f.CreateFactoryFromConfig("")
+// 	filter := filterFactory.CreateFilter()
 
+// 	// conn := &upstreamConnWrapper{
+// 	// 	TcpUpstreamFilter: filter,
+// 	// 	finalizer:         new(int),
+// 	// }
+// 	connID := atomic.AddUint64(&upstreamConnIDGenerator, 1)
+// 	_ = UpstreamFilters.StoreFilterByConnID(connID, filter)
 // 	// conn := &upstreamConnWrapper{
 // 	// 	TcpUpstreamFilter: filter,
 // 	// 	finalizer:         new(int),
@@ -210,12 +236,24 @@ func envoyGoOnTcpUpstreamConfig(libraryIDPtr uint64, libraryIDLen uint64, config
 // 	// filter := UpstreamFilters.GetFilterByConnID(connID)
 // 	// UpstreamFilters.DeleteFilterByConnID(connID)
 // 	UpstreamFilters.StoreFilterByWrapper(uint64(uintptr(wrapper)), filter)
+// 	// filter := UpstreamFilters.GetFilterByConnID(connID)
+// 	// UpstreamFilters.DeleteFilterByConnID(connID)
+// 	UpstreamFilters.StoreFilterByWrapper(uint64(uintptr(wrapper)), filter)
 
+// 	filter.OnPoolReady(cb)
 // 	filter.OnPoolReady(cb)
 
 // 	return connID
 // }
+// 	return connID
+// }
 
+// //export envoyGoOnUpstreamConnectionFailure
+// func envoyGoOnUpstreamConnectionFailure(wrapper unsafe.Pointer, reason int, connID uint64) {
+// 	filter := UpstreamFilters.GetFilterByConnID(connID)
+// 	UpstreamFilters.DeleteFilterByConnID(connID)
+// 	filter.OnPoolFailure(api.PoolFailureReason(reason), "")
+// }
 // //export envoyGoOnUpstreamConnectionFailure
 // func envoyGoOnUpstreamConnectionFailure(wrapper unsafe.Pointer, reason int, connID uint64) {
 // 	filter := UpstreamFilters.GetFilterByConnID(connID)
@@ -256,7 +294,11 @@ func envoyGoEncodeData(s *C.processState, endStream, buffer, length uint64) uint
 	// 	data := utils.BytesToSlice(sliceData, sliceLen)
 	// 	buf = append(buf, data...)
 	// }
+	// 	data := utils.BytesToSlice(sliceData, sliceLen)
+	// 	buf = append(buf, data...)
+	// }
 
+	if filter.EncodeData(buf, endStream == 1) {
 	if filter.EncodeData(buf, endStream == 1) {
 		return 1
 	} else {
@@ -310,7 +352,17 @@ func envoyGoOnUpstreamData(s *C.processState, endStream, buffer, length uint64) 
 	// 	data := utils.BytesToSlice(sliceData, sliceLen)
 	// 	buf = append(buf, data...)
 	// }
+	// 	data := utils.BytesToSlice(sliceData, sliceLen)
+	// 	buf = append(buf, data...)
+	// }
 
+	// if filter.EncodeData(buf, endStream == 1) {
+	// 	return 1
+	// } else {
+	// 	return 0
+	// }
+
+	return uint64(filter.OnUpstreamData(buf, endStream == 1))
 	// if filter.EncodeData(buf, endStream == 1) {
 	// 	return 1
 	// } else {
@@ -320,6 +372,15 @@ func envoyGoOnUpstreamData(s *C.processState, endStream, buffer, length uint64) 
 	return uint64(filter.OnUpstreamData(buf, endStream == 1))
 }
 
+// //export envoyGoOnUpstreamEvent
+// func envoyGoOnUpstreamEvent(wrapper unsafe.Pointer, event int) {
+// 	filter := UpstreamFilters.GetFilterByWrapper(uint64(uintptr(wrapper)))
+// 	e := api.ConnectionEvent(event)
+// 	filter.OnEvent(e)
+// 	if e == api.LocalClose || e == api.RemoteClose {
+// 		UpstreamFilters.DeleteFilterByWrapper(uint64(uintptr(wrapper)))
+// 	}
+// }
 // //export envoyGoOnUpstreamEvent
 // func envoyGoOnUpstreamEvent(wrapper unsafe.Pointer, event int) {
 // 	filter := UpstreamFilters.GetFilterByWrapper(uint64(uintptr(wrapper)))
