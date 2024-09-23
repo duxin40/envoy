@@ -55,13 +55,14 @@ type tcpUpstreamFilter struct {
 }
 
 func (*tcpUpstreamFilter) EncodeData(buffer api.BufferInstance, endOfStream bool) bool {
-	fmt.Println("[http2rpc][DecodeData] start")
+	fmt.Println("[http2rpc][EncodeData] start")
+	fmt.Println(fmt.Sprintf("[http2rpc][EncodeData]req buffer: %+v", buffer.String()))
 
 	mtdname := "sayName"
 	oldargs := map[string]interface{}{
 		"name": "jackduxinxxx",
 	}
-	fmt.Println("[http2rpc][DecodeData] start1")
+	fmt.Println("[http2rpc][EncodeData] start1")
 
 	types := make([]string, 0, len(oldargs))
 	args := make([]hessian.Object, 0, len(oldargs))
@@ -103,7 +104,7 @@ func (*tcpUpstreamFilter) EncodeData(buffer api.BufferInstance, endOfStream bool
 	//newIvc.SetAttachment(constant.GroupKey, "DEFAULT_GROUP")
 	//newIvc.SetAttachment(constant.ServiceKey, "demoService")
 	fmt.Printf("newIvc: %+v", newIvc)
-	fmt.Println("[http2rpc][DecodeData] start222")
+	fmt.Println("[http2rpc][EncodeData] start222")
 
 	codec := &dubbo2.DubboCodec{}
 	req := remoting.NewRequest("2.0.2")
@@ -130,7 +131,7 @@ func (*tcpUpstreamFilter) EncodeData(buffer api.BufferInstance, endOfStream bool
 	//api.LogInfof("[http2rpc][DecodeRequest] req: %+v", buf.String())
 	_ = buffer.Set(buf.Bytes())
 
-	fmt.Println("[http2rpc][DecodeData] end")
+	fmt.Println("[http2rpc][EncodeData] end")
 
 	return false
 }
@@ -142,23 +143,24 @@ const (
 )
 
 func (*tcpUpstreamFilter) OnUpstreamData(buffer api.BufferInstance, endOfStream bool) api.UpstreamDataStatus {
-	fmt.Println("[http2rpc][EncodeData] start")
+	fmt.Println("[http2rpc][OnUpstreamData] start")
+	fmt.Println(fmt.Sprintf("[http2rpc][OnUpstreamData]resp buffer: %+v", buffer.String()))
 	if buffer.Len() < DUBBO_MAGIC_SIZE || binary.BigEndian.Uint16(buffer.Bytes()) != hessian.MAGIC {
 		//_ = data.Set([]byte(hessian.ErrIllegalPackage.Error()))
-		fmt.Printf("[http2rpc][EncodeData] Magic error, buffer.Len(): %+v", buffer.Len())
+		fmt.Printf("[http2rpc][OnUpstreamData] Magic error, buffer.Len(): %+v", buffer.Len())
 		return api.UpstreamDataFinish
 	}
 	if buffer.Len() < hessian.HEADER_LENGTH {
-		fmt.Printf("[http2rpc][EncodeData] Header length error, buffer.Len(): %+v", buffer.Len())
+		fmt.Printf("[http2rpc][OnUpstreamData] Header length error, buffer.Len(): %+v", buffer.Len())
 		return api.UpstreamDataFinish
 	}
 	bodyLength := binary.BigEndian.Uint32(buffer.Bytes()[DUBBO_LENGTH_OFFSET:])
 	if buffer.Len() < (int(bodyLength) + hessian.HEADER_LENGTH) {
-		fmt.Printf("[http2rpc][EncodeData] Body length error, buffer.Len(): %+v", buffer.Len())
+		fmt.Printf("[http2rpc][OnUpstreamData] Body length error, buffer.Len(): %+v", buffer.Len())
 		return api.UpstreamDataFinish
 	}
-	fmt.Printf("[http2rpc][EncodeData] data: %+v", buffer)
-	fmt.Printf("[http2rpc][EncodeData] data: %+v", string(buffer.Bytes()[DUBBO_HEADER_SIZE:]))
+	// fmt.Printf("[http2rpc][OnUpstreamData] data: %+v", buffer)
+	// fmt.Printf("[http2rpc][OnUpstreamData] data: %+v", string(buffer.Bytes()[DUBBO_HEADER_SIZE:]))
 
 	// 读取Dubbo消息的长度
 	// dubboDataLength := int(binary.BigEndian.Uint32(buffer.Bytes()[DUBBO_LENGTH_OFFSET :]))
@@ -187,18 +189,18 @@ func (*tcpUpstreamFilter) OnUpstreamData(buffer api.BufferInstance, endOfStream 
 	decoder := hessian.NewDecoder(b)
 	_, err := decoder.Decode()
 	if err != nil {
-		panic(fmt.Sprintf("[http2rpc][EncodeResponse] Decode, err: %+v", err))
+		panic(fmt.Sprintf("[http2rpc][OnUpstreamData] Decode, err: %+v", err))
 	}
 	rsp, err := decoder.Decode()
 	if err != nil {
-		panic(fmt.Sprintf("[http2rpc][EncodeResponse] Decode-2, err: %+v", err))
+		panic(fmt.Sprintf("[http2rpc][OnUpstreamData] Decode-2, err: %+v", err))
 	}
-	fmt.Printf("[http2rpc][EncodeResponse] Decode, val: %+v", rsp)
+	// fmt.Printf("[http2rpc][OnUpstreamData] Decode, val: %+v", rsp)
 	bodyBytes := []byte(fmt.Sprintf("%s", rsp))
 	_ = buffer.Set(bodyBytes)
 	// f.RespHeader.Set("Content-Length", buffer.Len())
 
-	fmt.Printf("[http2rpc][EncodeData] end, length: %+v", buffer.Len())
+	fmt.Printf("[http2rpc][OnUpstreamData] end, length: %+v", buffer.Len())
 
 	return api.UpstreamDataFinish
 }
