@@ -7,7 +7,6 @@ import (
 
 	"dubbo.apache.org/dubbo-go/v3/common/constant"
 	"dubbo.apache.org/dubbo-go/v3/filter/generic/generalizer"
-	"dubbo.apache.org/dubbo-go/v3/remoting"
 	"github.com/envoyproxy/envoy/contrib/golang/common/go/api"
 
 	"github.com/envoyproxy/envoy/contrib/golang/upstreams/http/tcp/source/go/pkg/upstreams/http/tcp"
@@ -19,9 +18,6 @@ import (
 	// "cgw.cestc.cn/gateway-control-plane/pkg/plugins/stream"
 
 	// "dubbo.apache.org/dubbo-go/v3/protocol"
-
-	dubbo2 "dubbo.apache.org/dubbo-go/v3/protocol/dubbo"
-	invocation2 "dubbo.apache.org/dubbo-go/v3/protocol/invocation"
 
 	// "encoding/json"
 	hessian "github.com/apache/dubbo-go-hessian2"
@@ -58,78 +54,78 @@ func (*tcpUpstreamFilter) EncodeData(buffer api.BufferInstance, endOfStream bool
 	fmt.Println("[http2rpc][EncodeData] start")
 	fmt.Println(fmt.Sprintf("[http2rpc][EncodeData]req buffer: %+v", buffer.String()))
 
-	mtdname := "sayName"
-	oldargs := map[string]interface{}{
-		"name": "jackduxinxxx",
-	}
-	fmt.Println("[http2rpc][EncodeData] start1")
+	// mtdname := "sayName"
+	// oldargs := map[string]interface{}{
+	// 	"name": "jackduxinxxx",
+	// }
+	// fmt.Println("[http2rpc][EncodeData] start1")
 
-	types := make([]string, 0, len(oldargs))
-	args := make([]hessian.Object, 0, len(oldargs))
-	attchments := map[string]interface{}{
-		constant.GenericKey:   constant.GenericSerializationDefault,
-		constant.InterfaceKey: "com.alibaba.nacos.example.dubbo.service.DemoService",
-		constant.MethodKey:    mtdname,
-	}
+	// types := make([]string, 0, len(oldargs))
+	// args := make([]hessian.Object, 0, len(oldargs))
+	// attchments := map[string]interface{}{
+	// 	constant.GenericKey:   constant.GenericSerializationDefault,
+	// 	constant.InterfaceKey: "com.alibaba.nacos.example.dubbo.service.DemoService",
+	// 	constant.MethodKey:    mtdname,
+	// }
 
-	g := getGeneralizer(constant.GenericSerializationDefault)
+	// g := getGeneralizer(constant.GenericSerializationDefault)
 
-	for _, arg := range oldargs {
-		// use the default generalizer(MapGeneralizer)
-		typ, err := g.GetType(arg)
-		if err != nil {
-			fmt.Printf("failed to get type, %v", err)
-		}
-		obj, err := g.Generalize(arg)
-		if err != nil {
-			fmt.Printf("generalization failed, %v", err)
-			return false
-		}
-		types = append(types, typ)
-		args = append(args, obj)
-	}
+	// for _, arg := range oldargs {
+	// 	// use the default generalizer(MapGeneralizer)
+	// 	typ, err := g.GetType(arg)
+	// 	if err != nil {
+	// 		fmt.Printf("failed to get type, %v", err)
+	// 	}
+	// 	obj, err := g.Generalize(arg)
+	// 	if err != nil {
+	// 		fmt.Printf("generalization failed, %v", err)
+	// 		return false
+	// 	}
+	// 	types = append(types, typ)
+	// 	args = append(args, obj)
+	// }
 
-	// construct a new invocation for generic call
-	newArgs := []interface{}{
-		mtdname,
-		types,
-		args,
-	}
-	newIvc := invocation2.NewRPCInvocation(constant.Generic, newArgs, attchments)
-	//newIvc.SetReply(genericInvocation.Reply())
-	//newIvc.Attachments()[constant.GenericKey] = invoker.GetURL().GetParam(constant.GenericKey, "")
-	newIvc.SetAttachment(constant.PathKey, "com.alibaba.nacos.example.dubbo.service.DemoService")
-	newIvc.SetAttachment(constant.InterfaceKey, "com.alibaba.nacos.example.dubbo.service.DemoService")
-	newIvc.SetAttachment(constant.VersionKey, "1.0.0")
-	//newIvc.SetAttachment(constant.GroupKey, "DEFAULT_GROUP")
-	//newIvc.SetAttachment(constant.ServiceKey, "demoService")
-	fmt.Printf("newIvc: %+v", newIvc)
-	fmt.Println("[http2rpc][EncodeData] start222")
+	// // construct a new invocation for generic call
+	// newArgs := []interface{}{
+	// 	mtdname,
+	// 	types,
+	// 	args,
+	// }
+	// newIvc := invocation2.NewRPCInvocation(constant.Generic, newArgs, attchments)
+	// //newIvc.SetReply(genericInvocation.Reply())
+	// //newIvc.Attachments()[constant.GenericKey] = invoker.GetURL().GetParam(constant.GenericKey, "")
+	// newIvc.SetAttachment(constant.PathKey, "com.alibaba.nacos.example.dubbo.service.DemoService")
+	// newIvc.SetAttachment(constant.InterfaceKey, "com.alibaba.nacos.example.dubbo.service.DemoService")
+	// newIvc.SetAttachment(constant.VersionKey, "1.0.0")
+	// //newIvc.SetAttachment(constant.GroupKey, "DEFAULT_GROUP")
+	// //newIvc.SetAttachment(constant.ServiceKey, "demoService")
+	// fmt.Printf("newIvc: %+v", newIvc)
+	// fmt.Println("[http2rpc][EncodeData] start222")
 
-	codec := &dubbo2.DubboCodec{}
-	req := remoting.NewRequest("2.0.2")
+	// codec := &dubbo2.DubboCodec{}
+	// req := remoting.NewRequest("2.0.2")
 
-	req.ID = 1
-	rsp := remoting.NewPendingResponse(req.ID)
-	rsp.Reply = newIvc.Reply()
-	remoting.AddPendingResponse(rsp)
+	// req.ID = 1
+	// rsp := remoting.NewPendingResponse(req.ID)
+	// rsp.Reply = newIvc.Reply()
+	// remoting.AddPendingResponse(rsp)
 
-	req.Data = newIvc
-	req.Event = false
-	req.TwoWay = true
-	buf, err := codec.EncodeRequest(req)
-	if err != nil {
-		fmt.Printf("failed to encode request, req: %+v, buf: %+v, err: %+v", req.Data, buf, err)
-		return false
-		// return &api.LocalResponse{
-		// 	Code:   500,
-		// 	Msg:    "failed to encode dubbo request",
-		// 	Header: nil,
-		// }
-	}
+	// req.Data = newIvc
+	// req.Event = false
+	// req.TwoWay = true
+	// buf, err := codec.EncodeRequest(req)
+	// if err != nil {
+	// 	fmt.Printf("failed to encode request, req: %+v, buf: %+v, err: %+v", req.Data, buf, err)
+	// 	return false
+	// 	// return &api.LocalResponse{
+	// 	// 	Code:   500,
+	// 	// 	Msg:    "failed to encode dubbo request",
+	// 	// 	Header: nil,
+	// 	// }
+	// }
 
-	//api.LogInfof("[http2rpc][DecodeRequest] req: %+v", buf.String())
-	_ = buffer.Set(buf.Bytes())
+	// //api.LogInfof("[http2rpc][DecodeRequest] req: %+v", buf.String())
+	// _ = buffer.Set(buf.Bytes())
 
 	fmt.Println("[http2rpc][EncodeData] end")
 
@@ -148,16 +144,16 @@ func (*tcpUpstreamFilter) OnUpstreamData(buffer api.BufferInstance, endOfStream 
 	if buffer.Len() < DUBBO_MAGIC_SIZE || binary.BigEndian.Uint16(buffer.Bytes()) != hessian.MAGIC {
 		//_ = data.Set([]byte(hessian.ErrIllegalPackage.Error()))
 		fmt.Printf("[http2rpc][OnUpstreamData] Magic error, buffer.Len(): %+v", buffer.Len())
-		return api.UpstreamDataFinish
+		return api.UpstreamDataFailure
 	}
 	if buffer.Len() < hessian.HEADER_LENGTH {
 		fmt.Printf("[http2rpc][OnUpstreamData] Header length error, buffer.Len(): %+v", buffer.Len())
-		return api.UpstreamDataFinish
+		return api.UpstreamDataFailure
 	}
 	bodyLength := binary.BigEndian.Uint32(buffer.Bytes()[DUBBO_LENGTH_OFFSET:])
 	if buffer.Len() < (int(bodyLength) + hessian.HEADER_LENGTH) {
 		fmt.Printf("[http2rpc][OnUpstreamData] Body length error, buffer.Len(): %+v", buffer.Len())
-		return api.UpstreamDataFinish
+		return api.UpstreamDataContinue
 	}
 	// fmt.Printf("[http2rpc][OnUpstreamData] data: %+v", buffer)
 	// fmt.Printf("[http2rpc][OnUpstreamData] data: %+v", string(buffer.Bytes()[DUBBO_HEADER_SIZE:]))
@@ -185,20 +181,20 @@ func (*tcpUpstreamFilter) OnUpstreamData(buffer api.BufferInstance, endOfStream 
 	// 	api.LogInfof("[http2rpc][EncodeResponse] Unmarshal, err: %+v", err)
 	// }
 
-	b := buffer.Bytes()[DUBBO_HEADER_SIZE:]
-	decoder := hessian.NewDecoder(b)
-	_, err := decoder.Decode()
-	if err != nil {
-		panic(fmt.Sprintf("[http2rpc][OnUpstreamData] Decode, err: %+v", err))
-	}
-	rsp, err := decoder.Decode()
-	if err != nil {
-		panic(fmt.Sprintf("[http2rpc][OnUpstreamData] Decode-2, err: %+v", err))
-	}
-	// fmt.Printf("[http2rpc][OnUpstreamData] Decode, val: %+v", rsp)
-	bodyBytes := []byte(fmt.Sprintf("%s", rsp))
-	_ = buffer.Set(bodyBytes)
-	// f.RespHeader.Set("Content-Length", buffer.Len())
+	// b := buffer.Bytes()[DUBBO_HEADER_SIZE:]
+	// decoder := hessian.NewDecoder(b)
+	// _, err := decoder.Decode()
+	// if err != nil {
+	// 	panic(fmt.Sprintf("[http2rpc][OnUpstreamData] Decode, err: %+v", err))
+	// }
+	// rsp, err := decoder.Decode()
+	// if err != nil {
+	// 	panic(fmt.Sprintf("[http2rpc][OnUpstreamData] Decode-2, err: %+v", err))
+	// }
+	// // fmt.Printf("[http2rpc][OnUpstreamData] Decode, val: %+v", rsp)
+	// bodyBytes := []byte(fmt.Sprintf("%s", rsp))
+	// _ = buffer.Set(bodyBytes)
+	// // f.RespHeader.Set("Content-Length", buffer.Len())
 
 	fmt.Printf("[http2rpc][OnUpstreamData] end, length: %+v", buffer.Len())
 

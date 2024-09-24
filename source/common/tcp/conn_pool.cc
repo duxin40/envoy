@@ -174,11 +174,11 @@ ConnPoolImpl::newPendingStream(Envoy::ConnectionPool::AttachContext& context,
 }
 
 Envoy::ConnectionPool::ActiveClientPtr ConnPoolImpl::instantiateActiveClient() {
-  uint32_t maxRequests = Envoy::ConnectionPool::ConnPoolImplBase::host()->cluster().maxRequestsPerConnection();  
-  uint32_t effective_concurrent_streams = (maxRequests != 0) ? maxRequests : 1;
+  // uint32_t maxRequests = Envoy::ConnectionPool::ConnPoolImplBase::host()->cluster().maxRequestsPerConnection();  
+  // uint32_t effective_concurrent_streams = (maxRequests != 0) ? maxRequests : 1;
   
   return std::make_unique<ActiveTcpClient>(*this, Envoy::ConnectionPool::ConnPoolImplBase::host(),
-                                           effective_concurrent_streams, idle_timeout_);
+                                           1, idle_timeout_);
 }
 
 void ConnPoolImpl::onPoolReady(Envoy::ConnectionPool::ActiveClient& client,
