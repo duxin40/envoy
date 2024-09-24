@@ -104,9 +104,9 @@ void TcpUpstream::encodeData(Buffer::Instance& data, bool end_stream) {
   state.setFilterState(FilterState::Done);
 
   state.doDataList.moveOut(data);
-  state.setFilterState(FilterState::Done);
+  // state.setFilterState(FilterState::Done);
 
-  state.doDataList.moveOut(data);
+  // state.doDataList.moveOut(data);
 
   upstream_conn_data_->connection().write(data, end_stream);
 }

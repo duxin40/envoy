@@ -38,17 +38,17 @@ static_resources:
                 typed_config:
                   "@type": type.googleapis.com/envoy.extensions.http.header_formatters.preserve_case.v3.PreserveCaseFormatterConfig
           http_filters:
-          # - name: envoy.filters.http.golang
-          #   typed_config:
-          #     "@type": type.googleapis.com/envoy.extensions.filters.http.golang.v3alpha.Config
-          #     library_id: simple
-          #     # library_path: /Users/duxin/cpp/src/envoy/examples/golang-http/lib/simple.so
-          #     library_path: /Users/duxin/cpp/src/envoy/examples/golang-http/simple/envoy/libgolang.so
-          #     plugin_name: simple
-          #     plugin_config:
-          #       "@type": type.googleapis.com/xds.type.v3.TypedStruct
-          #       value:
-          #         prefix_localreply_body: "Configured local reply from go"
+          - name: envoy.filters.http.golang
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.golang.v3alpha.Config
+              library_id: simple
+              # library_path: /Users/duxin/cpp/src/envoy/examples/golang-http/lib/simple.so
+              library_path: /Users/duxin/cpp/src/envoy/examples/golang-http/simple/envoy/libgolang.so
+              plugin_name: simple
+              plugin_config:
+                "@type": type.googleapis.com/xds.type.v3.TypedStruct
+                value:
+                  prefix_localreply_body: "Configured local reply from go"
           # - name: envoy.filters.http.golang
           #   typed_config:
           #     "@type": type.googleapis.com/envoy.extensions.filters.http.golang.v3alpha.Config
@@ -156,7 +156,7 @@ static_resources:
     #     "@type": type.googleapis.com/envoy.extensions.upstreams.http.tcp.v3.TcpConnectionPoolProto
 
     # for tcp conn pool multiplex
-    max_requests_per_connection: 10000000
+    # max_requests_per_connection: 10000000
 
     load_assignment:
       cluster_name: local_service
