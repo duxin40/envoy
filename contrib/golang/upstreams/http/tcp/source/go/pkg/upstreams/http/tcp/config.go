@@ -97,36 +97,6 @@ func envoyGoOnTcpUpstreamConfig(c *C.httpConfig) uint64 {
 	return configNum
 }
 
-// //export envoyGoFilterNewHttpPluginConfig
-// func envoyGoFilterNewHttpPluginConfig(c *C.httpConfig) uint64 {
-// 	buf := utils.BytesToSlice(uint64(c.config_ptr), uint64(c.config_len))
-// 	var any anypb.Any
-// 	proto.Unmarshal(buf, &any)
-
-// 	// Requests.initialize(uint32(c.concurrency))
-
-// 	configNum := atomic.AddUint64(&configNumGenerator, 1)
-
-// 	name := utils.BytesToString(uint64(c.plugin_name_ptr), uint64(c.plugin_name_len))
-// 	configParser := getHttpFilterConfigParser(name)
-
-// 	var parsedConfig interface{}
-// 	var err error
-// 	if c.is_route_config == 1 {
-// 		parsedConfig, err = configParser.Parse(&any, nil)
-// 	} else {
-// 		config := createConfig(c)
-// 		parsedConfig, err = configParser.Parse(&any, config)
-// 	}
-// 	if err != nil {
-// 		cAPI.HttpLog(api.Error, fmt.Sprintf("failed to parse golang plugin config: %v", err))
-// 		return 0
-// 	}
-// 	configCache.Store(configNum, parsedConfig)
-
-// 	return configNum
-// }
-
 //export envoyGoFilterDestroyHttpPluginConfig
 func envoyGoFilterDestroyHttpPluginConfig(id uint64, needDelay int) {
 	if needDelay == 1 {
@@ -145,23 +115,3 @@ func envoyGoFilterDestroyHttpPluginConfig(id uint64, needDelay int) {
 	// 	forceGCFinalizer()
 	// }
 }
-
-// //export envoyGoFilterMergeHttpPluginConfig
-// func envoyGoFilterMergeHttpPluginConfig(namePtr, nameLen, parentId, childId uint64) uint64 {
-// 	name := utils.BytesToString(namePtr, nameLen)
-// 	configParser := getHttpFilterConfigParser(name)
-
-// 	parent, ok := configCache.Load(parentId)
-// 	if !ok {
-// 		panic(fmt.Sprintf("merge config: get parentId: %d config failed", parentId))
-// 	}
-// 	child, ok := configCache.Load(childId)
-// 	if !ok {
-// 		panic(fmt.Sprintf("merge config: get childId: %d config failed", childId))
-// 	}
-
-// 	new := configParser.Merge(parent, child)
-// 	configNum := atomic.AddUint64(&configNumGenerator, 1)
-// 	configCache.Store(configNum, new)
-// 	return configNum
-// }
