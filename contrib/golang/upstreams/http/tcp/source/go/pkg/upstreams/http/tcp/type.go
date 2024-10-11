@@ -35,6 +35,7 @@ const (
 // api.BufferInstance
 type httpBuffer struct {
 	state               *processState
+	cb                  *connectionCallback
 	envoyBufferInstance uint64
 	length              uint64
 	value               []byte

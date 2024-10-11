@@ -242,13 +242,9 @@ TcpUpstreamDsoImpl::TcpUpstreamDsoImpl(const std::string dso_name)
       envoy_go_on_upstream_data_, handler_, dso_name, "envoyGoOnUpstreamData");
 }
 
-GoUint64 TcpUpstreamDsoImpl::envoyGoOnTcpUpstreamConfig(GoUint64 library_id_ptr,
-                                                                  GoUint64 library_id_len,
-                                                                  GoUint64 config_ptr,
-                                                                  GoUint64 config_len) {
+GoUint64 TcpUpstreamDsoImpl::envoyGoOnTcpUpstreamConfig(httpConfig* p0) {
   ASSERT(envoy_go_on_tcp_upstream_config_ != nullptr);
-  return envoy_go_on_tcp_upstream_config_(library_id_ptr, library_id_len, config_ptr,
-                                                   config_len);
+  return envoy_go_on_tcp_upstream_config_(p0);
 }
 
 GoUint64 TcpUpstreamDsoImpl::envoyGoEncodeData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) {
