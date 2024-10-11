@@ -30,25 +30,10 @@ void TcpConnPool::onPoolReady(Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& co
   auto upstream =
       std::make_shared<TcpUpstream>(&callbacks_->upstreamToDownstream(), std::move(conn_data), dynamic_lib_, config_);
 
-  // wrapper_ = new TcpConnPoolWrapper(shared_from_this(), upstream);
-  // wrapper_ = new TcpConnPoolWrapper(shared_from_this(), upstream);
-
-  // upstream->wrapper_ = wrapper_;
-  // upstream->wrapper_ = wrapper_;
-
-  // go_conn_id_ = dynamic_lib_->envoyGoOnUpstreamConnectionReady(wrapper_,
-  //  reinterpret_cast<unsigned long long>(plugin_name_.data()), plugin_name_.length(),
-  //     config_id_);
-  // go_conn_id_ = dynamic_lib_->envoyGoOnUpstreamConnectionReady(wrapper_,
-  //  reinterpret_cast<unsigned long long>(plugin_name_.data()), plugin_name_.length(),
-  //     config_id_);
-
   ENVOY_LOG(debug, "get host info: {}", host->cluster().name());
 
   callbacks_->onPoolReady(upstream, host, latched_conn.connectionInfoProvider(),
-                          latched_conn.streamInfo(), {});      
-  // callbacks_->onPoolReady(std::move(upstream), host, latched_conn.connectionInfoProvider(),
-                          // latched_conn.streamInfo(), {});      
+                          latched_conn.streamInfo(), {});       
 }
 
 TcpUpstream::TcpUpstream(Router::UpstreamToDownstream* upstream_request,

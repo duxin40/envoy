@@ -78,34 +78,6 @@ CAPIStatus envoyGoTcpUpstreamHandlerWrapper(void* r,
   return CAPIStatus::CAPIFilterIsGone;
 }
 
-// CAPIStatus envoyGoTcpUpstreamInfo(void* u, int info_type, void* ret) {
-//   auto* wrapper = reinterpret_cast<TcpConnPoolWrapper*>(u);
-//   // TcpConPoolSharedPtr& pool_shared_ptr = wrapper->tcp_conn_pool_ptr_;
-//   // TcpConPoolSharedPtr& pool_shared_ptr = wrapper->tcp_conn_pool_ptr_;
-//   TcpUpstreamSharedPtr& upstream_shared_ptr = wrapper->tcp_upstream_ptr_;
-
-//   // if (TcpConPoolSharedPtr uu = weak_ptr.lock()) {
-//   auto* goStr = reinterpret_cast<GoString*>(ret);
-//   switch (static_cast<ConnectionInfoType>(info_type)) {
-//   case ConnectionInfoType::ConnectionInfoRouterName:
-//     wrapper->str_value_ = upstream_shared_ptr->route_entry_->virtualHost().routeConfig().name();
-//     break;
-//   case ConnectionInfoType::ConnectionInfoClusterName:
-//     wrapper->str_value_ = upstream_shared_ptr->route_entry_->clusterName();
-//     wrapper->str_value_ = upstream_shared_ptr->route_entry_->clusterName();
-//     break;
-//   default:
-//     PANIC_DUE_TO_CORRUPT_ENUM;
-//   }
-
-//   goStr->p = wrapper->str_value_.data();
-//   goStr->n = wrapper->str_value_.length();
-//   return CAPIStatus::CAPIOK;
-//   // }
-  
-//   return CAPIStatus::CAPIFilterIsGone;
-// }
-
 CAPIStatus envoyGoTcpUpstreamGetBuffer(void* s, uint64_t buffer_ptr, void* data) {
   return envoyGoTcpUpstreamProcessStateHandlerWrapper(
       s, [buffer_ptr, data](std::shared_ptr<TcpUpstream>& filter, ProcessorState& state) -> CAPIStatus {
