@@ -51,9 +51,9 @@ extern "C" {
 CAPIStatus envoyGoTcpUpstreamProcessStateHandlerWrapper(
     void* s, std::function<CAPIStatus(std::shared_ptr<TcpUpstream>&, ProcessorState&)> f) {
   auto state = static_cast<ProcessorState*>(reinterpret_cast<processState*>(s));
-  // if (!state->isProcessingInGo()) {
-  //   return CAPIStatus::CAPINotInGo;
-  // }
+  if (!state->isProcessingInGo()) {
+    return CAPIStatus::CAPINotInGo;
+  }
   auto req = static_cast<RequestInternal*>(state->req);
   auto weak_filter = req->weakFilter();
   if (auto filter = weak_filter.lock()) {
@@ -62,42 +62,49 @@ CAPIStatus envoyGoTcpUpstreamProcessStateHandlerWrapper(
   return CAPIStatus::CAPIFilterIsGone;
 }
 
-CAPIStatus envoyGoTcpUpstreamInfo(void* u, int info_type, void* ret) {
-  auto* wrapper = reinterpret_cast<TcpConnPoolWrapper*>(u);
-  // TcpConPoolSharedPtr& pool_shared_ptr = wrapper->tcp_conn_pool_ptr_;
-  // TcpConPoolSharedPtr& pool_shared_ptr = wrapper->tcp_conn_pool_ptr_;
-  TcpUpstreamSharedPtr& upstream_shared_ptr = wrapper->tcp_upstream_ptr_;
-
-  // if (TcpConPoolSharedPtr uu = weak_ptr.lock()) {
-  auto* goStr = reinterpret_cast<GoString*>(ret);
-  switch (static_cast<ConnectionInfoType>(info_type)) {
-  case ConnectionInfoType::ConnectionInfoRouterName:
-    wrapper->str_value_ = upstream_shared_ptr->route_entry_->virtualHost().routeConfig().name();
-    break;
-  case ConnectionInfoType::ConnectionInfoClusterName:
-    wrapper->str_value_ = upstream_shared_ptr->route_entry_->clusterName();
-    wrapper->str_value_ = upstream_shared_ptr->route_entry_->clusterName();
-    break;
-  default:
-    PANIC_DUE_TO_CORRUPT_ENUM;
+CAPIStatus envoyGoTcpUpstreamHandlerWrapper(void* r,
+                                       std::function<CAPIStatus(std::shared_ptr<TcpUpstream>&)> f) {
+  auto req = reinterpret_cast<RequestInternal*>(r);
+  auto weak_filter = req->weakFilter();
+  if (auto filter = weak_filter.lock()) {
+    // Though it's memory safe without this limitation.
+    // But it's not a good idea to run Go code after continue back to Envoy C++,
+    // so, add this limitation.
+    if (!filter->isProcessingInGo()) {
+      return CAPIStatus::CAPINotInGo;
+    }
+    return f(filter);
   }
-
-  goStr->p = wrapper->str_value_.data();
-  goStr->n = wrapper->str_value_.length();
-  return CAPIStatus::CAPIOK;
-  // }
-  
   return CAPIStatus::CAPIFilterIsGone;
 }
 
-CAPIStatus envoyGoTcpUpstreamConnEnableHalfClose(void* u, int enable_half_close) {
-  auto* wrapper = reinterpret_cast<TcpConnPoolWrapper*>(u);
-  TcpUpstreamSharedPtr& upstream_shared_ptr = wrapper->tcp_upstream_ptr_;
+// CAPIStatus envoyGoTcpUpstreamInfo(void* u, int info_type, void* ret) {
+//   auto* wrapper = reinterpret_cast<TcpConnPoolWrapper*>(u);
+//   // TcpConPoolSharedPtr& pool_shared_ptr = wrapper->tcp_conn_pool_ptr_;
+//   // TcpConPoolSharedPtr& pool_shared_ptr = wrapper->tcp_conn_pool_ptr_;
+//   TcpUpstreamSharedPtr& upstream_shared_ptr = wrapper->tcp_upstream_ptr_;
 
-  upstream_shared_ptr->enableHalfClose(static_cast<bool>(enable_half_close));
+//   // if (TcpConPoolSharedPtr uu = weak_ptr.lock()) {
+//   auto* goStr = reinterpret_cast<GoString*>(ret);
+//   switch (static_cast<ConnectionInfoType>(info_type)) {
+//   case ConnectionInfoType::ConnectionInfoRouterName:
+//     wrapper->str_value_ = upstream_shared_ptr->route_entry_->virtualHost().routeConfig().name();
+//     break;
+//   case ConnectionInfoType::ConnectionInfoClusterName:
+//     wrapper->str_value_ = upstream_shared_ptr->route_entry_->clusterName();
+//     wrapper->str_value_ = upstream_shared_ptr->route_entry_->clusterName();
+//     break;
+//   default:
+//     PANIC_DUE_TO_CORRUPT_ENUM;
+//   }
 
-  return CAPIOK;
-}
+//   goStr->p = wrapper->str_value_.data();
+//   goStr->n = wrapper->str_value_.length();
+//   return CAPIStatus::CAPIOK;
+//   // }
+  
+//   return CAPIStatus::CAPIFilterIsGone;
+// }
 
 CAPIStatus envoyGoTcpUpstreamGetBuffer(void* s, uint64_t buffer_ptr, void* data) {
   return envoyGoTcpUpstreamProcessStateHandlerWrapper(
@@ -125,6 +132,21 @@ CAPIStatus envoyGoTcpUpstreamSetBufferHelper(void* s, uint64_t buffer_ptr, void*
         auto buffer = reinterpret_cast<Buffer::Instance*>(buffer_ptr);
         auto value = stringViewFromGoPointer(data, length);
         return filter->setBufferHelper(state, buffer, value, action);
+      });
+}
+
+CAPIStatus envoyGoTcpUpstreamGetStringValue(void* r, int id, uint64_t* value_data, int* value_len) {
+  return envoyGoTcpUpstreamHandlerWrapper(
+      r, [id, value_data, value_len](std::shared_ptr<TcpUpstream>& filter) -> CAPIStatus {
+        return filter->getStringValue(id, value_data, value_len);
+      });
+}
+
+CAPIStatus envoyGoTcpUpstreamConnEnableHalfClose(void* r, int enabled) {
+  return envoyGoTcpUpstreamHandlerWrapper(
+      r, [enabled](std::shared_ptr<TcpUpstream>& filter) -> CAPIStatus {
+        filter->enableHalfClose(enabled == 0 ? false:true);
+        return CAPIOK;
       });
 }
 

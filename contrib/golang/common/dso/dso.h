@@ -198,9 +198,7 @@ public:
   TcpUpstreamDso(const std::string dso_name) : Dso(dso_name){};
   ~TcpUpstreamDso() override = default;
 
-  virtual GoUint64 envoyGoOnTcpUpstreamConfig(GoUint64 library_id_ptr,
-                                                      GoUint64 library_id_len, GoUint64 config_ptr,
-                                                      GoUint64 config_len) PURE;
+  virtual GoUint64 envoyGoOnTcpUpstreamConfig(httpConfig* p0) PURE;
   virtual GoUint64 envoyGoEncodeData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) PURE;
 
   virtual GoUint64 envoyGoOnUpstreamData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) PURE;
@@ -212,18 +210,14 @@ public:
   TcpUpstreamDsoImpl(const std::string dso_name);
   ~TcpUpstreamDsoImpl() override = default;
 
-  GoUint64 envoyGoOnTcpUpstreamConfig(GoUint64 library_id_ptr, GoUint64 library_id_len,
-                                              GoUint64 config_ptr, GoUint64 config_len) override;
+  GoUint64 envoyGoOnTcpUpstreamConfig(httpConfig* p0) override;
 
   GoUint64 envoyGoEncodeData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) override;
 
   GoUint64 envoyGoOnUpstreamData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) override;
 
 private:
-  GoUint64 (*envoy_go_on_tcp_upstream_config_)(GoUint64 library_id_ptr,
-                                                        GoUint64 library_id_len,
-                                                        GoUint64 config_ptr,
-                                                        GoUint64 config_len) = {nullptr};
+  GoUint64 (*envoy_go_on_tcp_upstream_config_)(httpConfig* p0) = {nullptr};
   GoUint64 (*envoy_go_on_encode_data_)(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) = {nullptr};
                                             
   GoUint64 (*envoy_go_on_upstream_data_)(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) = {nullptr};

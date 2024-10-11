@@ -52,6 +52,8 @@ type filter struct {
 // The endStream is true if the request doesn't have body
 func (f *filter) DecodeHeaders(header api.RequestHeaderMap, endStream bool) api.StatusType {
 	api.LogInfo("[http2rpc][DecodeHeaders] start")
+	api.LogInfo(fmt.Sprintf("[http2rpc][DecodeHeaders] route: %s", f.callbacks.StreamInfo().GetRouteName()))
+
 	f.Header = header
 	header.Set(":status", "200")
 	//headers.Set(":method", "CONNECT")
@@ -114,7 +116,7 @@ func (f *filter) DecodeData(buffer api.BufferInstance, endStream bool) api.Statu
 	codec := &dubbo2.DubboCodec{}
 	req := remoting.NewRequest("2.0.2")
 
-	req.ID = 1
+	// req.ID = 1
 	rsp := remoting.NewPendingResponse(req.ID)
 	rsp.Reply = newIvc.Reply()
 	remoting.AddPendingResponse(rsp)
@@ -162,9 +164,10 @@ func (f *filter) EncodeHeaders(header api.ResponseHeaderMap, endStream bool) api
 }
 
 const (
-	DUBBO_LENGTH_OFFSET = 12
-	DUBBO_MAGIC_SIZE    = 2
-	DUBBO_HEADER_SIZE   = 16
+	DUBBO_MAGIC_SIZE        = 2
+	DUBBO_REQUEST_ID_OFFSET = 4
+	DUBBO_LENGTH_OFFSET     = 12
+	DUBBO_HEADER_SIZE       = 16
 )
 
 // EncodeData might be called multiple times during handling the response body.
@@ -187,6 +190,9 @@ func (f *filter) EncodeData(buffer api.BufferInstance, endStream bool) api.Statu
 	}
 	api.LogInfof("[http2rpc][EncodeData] data: %+v", buffer)
 	api.LogInfof("[http2rpc][EncodeData] data: %+v", string(buffer.Bytes()[DUBBO_HEADER_SIZE:]))
+
+	requestId := binary.BigEndian.Uint64(buffer.Bytes()[DUBBO_REQUEST_ID_OFFSET:])
+	api.LogInfof("[http2rpc][EncodeData] requestID: %+v", requestId)
 
 	// 读取Dubbo消息的长度
 	// dubboDataLength := int(binary.BigEndian.Uint32(buffer.Bytes()[DUBBO_LENGTH_OFFSET :]))

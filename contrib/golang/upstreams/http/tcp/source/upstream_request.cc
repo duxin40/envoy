@@ -53,14 +53,14 @@ void TcpConnPool::onPoolReady(Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& co
 
 TcpUpstream::TcpUpstream(Router::UpstreamToDownstream* upstream_request,
                          Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& upstream, Dso::TcpUpstreamDsoPtr dynamic_lib,
-                         envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config config)
+                         FilterConfigSharedPtr config)
     :route_entry_(upstream_request->route().routeEntry()), upstream_request_(upstream_request), upstream_conn_data_(std::move(upstream)), dynamic_lib_(dynamic_lib),
     config_(config), req_(new RequestInternal(*this)), encoding_state_(req_->encodingState()), decoding_state_(req_->decodingState()) {
   
   // req is used by go, so need to use raw memory and then it is safe to release at the gc
   // finalize phase of the go object.
-  req_->plugin_name.data = config_.plugin_name().data();
-  req_->plugin_name.len = config_.plugin_name().length();
+  req_->plugin_name.data = config_->pluginName().data();
+  req_->plugin_name.len = config_->pluginName().length();
 
   upstream_conn_data_->connection().enableHalfClose(true);
   upstream_conn_data_->addUpstreamCallbacks(*this);
@@ -69,6 +69,7 @@ TcpUpstream::TcpUpstream(Router::UpstreamToDownstream* upstream_request,
 bool TcpUpstream::initRequest() {
   if (req_->configId == 0) {
     req_->setWeakFilter(weak_from_this());
+    req_->configId = config_->getConfigId();
     return true;
   }
   return false;
@@ -77,21 +78,13 @@ bool TcpUpstream::initRequest() {
 void TcpUpstream::encodeData(Buffer::Instance& data, bool end_stream) {
   // end_stream = false;
 
+  ENVOY_LOG(debug, "encodeData: {}", data.toString());
+
   initRequest();
 
   ProcessorState& state = encoding_state_;
   Buffer::Instance& buffer = state.doDataList.push(data);
   auto s = dynamic_cast<processState*>(&state);
-
-  // Buffer::RawSliceVector slice_vector = data.getRawSlices();
-  // int slice_num = slice_vector.size();
-  // unsigned long long* slices = new unsigned long long[2 * slice_num];
-  // for (int i = 0; i < slice_num; i++) {
-  //   const Buffer::RawSlice& s = slice_vector[i];
-  //   slices[2 * i] = reinterpret_cast<unsigned long long>(s.mem_);
-  //   slices[2 * i + 1] = s.len_;
-  // }
-
   state.setFilterState(FilterState::ProcessingData);
 
   GoUint64 if_end_stream = dynamic_lib_->envoyGoEncodeData(
@@ -101,12 +94,9 @@ void TcpUpstream::encodeData(Buffer::Instance& data, bool end_stream) {
   } else {
     end_stream = true;
   }
+
   state.setFilterState(FilterState::Done);
-
   state.doDataList.moveOut(data);
-  // state.setFilterState(FilterState::Done);
-
-  // state.doDataList.moveOut(data);
 
   upstream_conn_data_->connection().write(data, end_stream);
 }
@@ -149,8 +139,13 @@ void TcpUpstream::encodeTrailers(const Envoy::Http::RequestTrailerMap&) {
   upstream_conn_data_->connection().write(data, true);
 }
 
-void TcpUpstream::enableHalfClose() {
-  upstream_conn_data_->connection().enableHalfClose(true);
+  /**
+   * Enable half-close semantics on the upstream connection. Reading a remote half-close
+   * will not fully close the connection. This is off by default.
+   */
+void TcpUpstream::enableHalfClose(bool enabled) {
+  ASSERT(upstream_conn_data_ != nullptr);
+  upstream_conn_data_->connection().enableHalfClose(enabled);
 }
 
 void TcpUpstream::readDisable(bool disable) {
@@ -168,47 +163,9 @@ void TcpUpstream::resetStream() {
 void TcpUpstream::onUpstreamData(Buffer::Instance& data, bool end_stream) {
   ENVOY_LOG(debug, "onUpstreamData, data: {}, end: {}", data.toString(), end_stream);
 
-  // Buffer::RawSliceVector slice_vector = data.getRawSlices();
-  // int slice_num = slice_vector.size();
-  // unsigned long long* slices = new unsigned long long[2 * slice_num];
-  // for (int i = 0; i < slice_num; i++) {
-  //   const Buffer::RawSlice& s = slice_vector[i];
-  //   slices[2 * i] = reinterpret_cast<unsigned long long>(s.mem_);
-  //   slices[2 * i + 1] = s.len_;
-  // }
-
   ProcessorState& state = decoding_state_;
   Buffer::Instance& buffer = state.doDataList.push(data);
   auto s = dynamic_cast<processState*>(&state);
-
-  // Buffer::RawSliceVector slice_vector = data.getRawSlices();
-  // int slice_num = slice_vector.size();
-  // unsigned long long* slices = new unsigned long long[2 * slice_num];
-  // for (int i = 0; i < slice_num; i++) {
-  //   const Buffer::RawSlice& s = slice_vector[i];
-  //   slices[2 * i] = reinterpret_cast<unsigned long long>(s.mem_);
-  //   slices[2 * i + 1] = s.len_;
-  // }
-
-  state.setFilterState(FilterState::ProcessingData);
-  // Buffer::RawSliceVector slice_vector = data.getRawSlices();
-  // int slice_num = slice_vector.size();
-  // unsigned long long* slices = new unsigned long long[2 * slice_num];
-  // for (int i = 0; i < slice_num; i++) {
-  //   const Buffer::RawSlice& s = slice_vector[i];
-  //   slices[2 * i] = reinterpret_cast<unsigned long long>(s.mem_);
-  //   slices[2 * i + 1] = s.len_;
-  // }
-
-  // Buffer::RawSliceVector slice_vector = data.getRawSlices();
-  // int slice_num = slice_vector.size();
-  // unsigned long long* slices = new unsigned long long[2 * slice_num];
-  // for (int i = 0; i < slice_num; i++) {
-  //   const Buffer::RawSlice& s = slice_vector[i];
-  //   slices[2 * i] = reinterpret_cast<unsigned long long>(s.mem_);
-  //   slices[2 * i + 1] = s.len_;
-  // }
-
   state.setFilterState(FilterState::ProcessingData);
 
   GoUint64 status = dynamic_lib_->envoyGoOnUpstreamData(
@@ -265,12 +222,6 @@ void TcpUpstream::onBelowWriteBufferLowWatermark() {
   if (upstream_request_) {
     upstream_request_->onBelowWriteBufferLowWatermark();
   }
-}
-
-void TcpUpstream::enableHalfClose(bool enabled) {
-  ASSERT(upstream_conn_data_ != nullptr);
-  upstream_conn_data_->connection().enableHalfClose(enabled);
-  ENVOY_LOG(debug, "set enableHalfClose, enabled: {}, actualEnabled: {}", enabled, upstream_conn_data_->connection().isHalfCloseEnabled());
 }
 
 CAPIStatus TcpUpstream::copyBuffer(ProcessorState& state, Buffer::Instance* buffer, char* data) {
@@ -341,6 +292,33 @@ CAPIStatus TcpUpstream::setBufferHelper(ProcessorState& state, Buffer::Instance*
   } else {
     buffer->add(value);
   }
+  return CAPIStatus::CAPIOK;
+}
+
+CAPIStatus TcpUpstream::getStringValue(int id, uint64_t* value_data, int* value_len) {
+  // lock until this function return since it may running in a Go thread.
+  Thread::LockGuard lock(mutex_);
+  if (has_destroyed_) {
+    ENVOY_LOG(debug, "golang filter has been destroyed");
+    return CAPIStatus::CAPIFilterIsDestroy;
+  }
+
+  // refer the string to req_->strValue, not deep clone, make sure it won't be freed while reading
+  // it on the Go side.
+  switch (static_cast<EnvoyValue>(id)) {
+  case EnvoyValue::RouteName:
+    req_->strValue = route_entry_->virtualHost().routeConfig().name();
+    break;
+  case EnvoyValue::ClusterName: {
+    req_->strValue = route_entry_->clusterName();
+    break;
+  }
+  default:
+    RELEASE_ASSERT(false, absl::StrCat("invalid string value id: ", id));
+  }
+
+  *value_data = reinterpret_cast<uint64_t>(req_->strValue.data());
+  *value_len = req_->strValue.length();
   return CAPIStatus::CAPIOK;
 }
 

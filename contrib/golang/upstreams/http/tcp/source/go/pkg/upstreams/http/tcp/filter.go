@@ -362,14 +362,13 @@ func (r *httpRequest) SendLocalReply(responseCode int, bodyText string, headers 
 func (r *httpRequest) Log(level api.LogType, message string) {
 	// TODO performance optimization points:
 	// Add a new goroutine to write logs asynchronously and avoid frequent cgo calls
-	// cAPI.HttpLog(level, fmt.Sprintf("[http][%v] %v", r.pluginName(), message))
+	cAPI.HttpLog(level, fmt.Sprintf("[http][%v] %v", r.pluginName(), message))
 	// The default log format is:
 	// [2023-08-09 03:04:16.179][1390][error][golang] [contrib/golang/common/log/cgo.cc:24] [http][plugin_name] msg
-	panic("please implement me")
 }
 
 func (r *httpRequest) LogLevel() api.LogType {
-	panic("please implement me")
+	return cAPI.HttpLogLevel()
 }
 
 func (r *httpRequest) GetProperty(key string) (string, error) {
@@ -380,12 +379,21 @@ func (r *httpRequest) Finalize(reason int) {
 	panic("please implement me")
 }
 
+func (s *httpRequest) EnableHalfClose(enabled bool) {
+	var enabledInt int
+	if enabled {
+		enabledInt = 1
+	}
+	cAPI.UpstreamConnEnableHalfClose(unsafe.Pointer(s), enabledInt)
+}
+
 type streamInfo struct {
 	request *httpRequest
 }
 
 func (s *streamInfo) GetRouteName() string {
-	panic("please implement me")
+	name, _ := cAPI.HttpGetStringValue(unsafe.Pointer(s.request), ValueRouteName)
+	return name
 }
 
 func (s *streamInfo) FilterChainName() string {
@@ -449,7 +457,8 @@ func (s *streamInfo) UpstreamClusterName() (string, bool) {
 }
 
 func (s *streamInfo) VirtualClusterName() (string, bool) {
-	panic("please implement me")
+	name, _ := cAPI.HttpGetStringValue(unsafe.Pointer(s.request), ValueClusterName)
+	return name, true
 }
 
 func (s *streamInfo) WorkerID() uint32 {
@@ -471,5 +480,55 @@ func (f *filterState) SetString(key, value string, stateType api.StateType, life
 }
 
 func (f *filterState) GetString(key string) string {
+	panic("please implement me")
+}
+
+type tcpUpstreamConfig struct {
+	config *C.httpConfig
+}
+
+func (c *tcpUpstreamConfig) Finalize() {
+	panic("please implement me")
+}
+
+func (c *tcpUpstreamConfig) DefineCounterMetric(name string) api.CounterMetric {
+	panic("please implement me")
+}
+
+func (c *tcpUpstreamConfig) DefineGaugeMetric(name string) api.GaugeMetric {
+	panic("please implement me")
+}
+
+type counterMetric struct {
+	config   *tcpUpstreamConfig
+	metricId uint32
+}
+
+func (m *counterMetric) Increment(offset int64) {
+	panic("please implement me")
+}
+
+func (m *counterMetric) Get() uint64 {
+	panic("please implement me")
+}
+
+func (m *counterMetric) Record(value uint64) {
+	panic("please implement me")
+}
+
+type gaugeMetric struct {
+	config   *tcpUpstreamConfig
+	metricId uint32
+}
+
+func (m *gaugeMetric) Increment(offset int64) {
+	panic("please implement me")
+}
+
+func (m *gaugeMetric) Get() uint64 {
+	panic("please implement me")
+}
+
+func (m *gaugeMetric) Record(value uint64) {
 	panic("please implement me")
 }

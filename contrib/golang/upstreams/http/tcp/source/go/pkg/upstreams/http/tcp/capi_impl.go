@@ -36,6 +36,12 @@ import (
 	"unsafe"
 
 	"github.com/envoyproxy/envoy/contrib/golang/common/go/api"
+	_ "github.com/envoyproxy/envoy/contrib/golang/common/go/api_impl"
+)
+
+const (
+	ValueRouteName   = 1
+	ValueClusterName = 2
 )
 
 var cAPI api.TcpUpstreamCAPI = &cgoApiImpl{}
@@ -81,8 +87,14 @@ func (c *cgoApiImpl) UpstreamInfo(f unsafe.Pointer, infoType int) string {
 	return strings.Clone(info)
 }
 
-func (c *cgoApiImpl) UpstreamConnEnableHalfClose(f unsafe.Pointer, enableHalfClose int) {
-	C.envoyGoTcpUpstreamConnEnableHalfClose(f, C.int(enableHalfClose))
+func (c *cgoApiImpl) UpstreamConnEnableHalfClose(r unsafe.Pointer, enableHalfClose int) {
+	req := (*httpRequest)(r)
+	// add a lock to protect filter->req_->strValue field in the Envoy side, from being writing concurrency,
+	// since there might be multiple concurrency goroutines invoking this API on the Go side.
+	req.mutex.Lock()
+	defer req.mutex.Unlock()
+
+	C.envoyGoTcpUpstreamConnEnableHalfClose(unsafe.Pointer(req.req), C.int(enableHalfClose))
 }
 
 func (c *cgoApiImpl) HttpGetBuffer(s unsafe.Pointer, bufferPtr uint64, length uint64) []byte {
@@ -121,4 +133,31 @@ func (c *cgoApiImpl) httpSetBufferHelper(state *processState, bufferPtr uint64, 
 	}
 	res := C.envoyGoTcpUpstreamSetBufferHelper(unsafe.Pointer(state.processState), C.uint64_t(bufferPtr), data, length, act)
 	handleCApiStatus(res)
+}
+
+func (c *cgoApiImpl) HttpGetStringValue(r unsafe.Pointer, id int) (string, bool) {
+	req := (*httpRequest)(r)
+	// add a lock to protect filter->req_->strValue field in the Envoy side, from being writing concurrency,
+	// since there might be multiple concurrency goroutines invoking this API on the Go side.
+	req.mutex.Lock()
+	defer req.mutex.Unlock()
+
+	var valueData C.uint64_t
+	var valueLen C.int
+	res := C.envoyGoTcpUpstreamGetStringValue(unsafe.Pointer(req.req), C.int(id), &valueData, &valueLen)
+	if res == C.CAPIValueNotFound {
+		return "", false
+	}
+	handleCApiStatus(res)
+	value := unsafe.String((*byte)(unsafe.Pointer(uintptr(valueData))), int(valueLen))
+	// copy the memory from c to Go.
+	return strings.Clone(value), true
+}
+
+func (c *cgoApiImpl) HttpLog(level api.LogType, message string) {
+	C.envoyGoFilterLog(C.uint32_t(level), unsafe.Pointer(unsafe.StringData(message)), C.int(len(message)))
+}
+
+func (c *cgoApiImpl) HttpLogLevel() api.LogType {
+	return api.GetLogLevel()
 }

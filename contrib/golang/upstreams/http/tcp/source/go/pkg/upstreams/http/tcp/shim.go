@@ -34,15 +34,9 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"strings"
 	"sync"
-	"sync/atomic"
-
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/envoyproxy/envoy/contrib/golang/common/go/api"
-	"github.com/envoyproxy/envoy/contrib/golang/common/go/utils"
 )
 
 var (
@@ -53,9 +47,6 @@ var (
 	ErrDupRequestKey = errors.New("dup request key")
 
 	UpstreamFilters = &TcpUpstreamFilterMap{}
-
-	configIDGenerator uint64
-	configCache       = &sync.Map{} // uint64 -> *anypb.Any
 
 	upstreamConnIDGenerator uint64
 
@@ -144,15 +135,19 @@ func createRequest(r *C.httpRequest) *httpRequest {
 		panic(fmt.Sprintf("createRequest failed, err: %s", err.Error()))
 	}
 
-	// configId := uint64(r.configId)
+	configId := uint64(r.configId)
 
-	f := GetTcpUpstreamConfigFactory(req.pluginName())
-	filterFactory := f.CreateFactoryFromConfig("")
-	filter := filterFactory.CreateFilter()
+	// f := GetTcpUpstreamConfigFactory(req.pluginName())
+	// filterFactory := f.CreateFactoryFromConfig("")
+	// filter := filterFactory.CreateFilter()
+
+	filterFactory, config := getHttpFilterFactoryAndConfig(req.pluginName(), configId)
+	f := filterFactory(config, req)
+	req.httpFilter = f
 
 	// filterFactory, config := getHttpFilterFactoryAndConfig(req.pluginName(), configId)
 	// f := filterFactory(config, req)
-	req.httpFilter = filter
+	// req.httpFilter = filter
 
 	return req
 }
@@ -169,19 +164,6 @@ func getState(s *C.processState) *processState {
 	}
 	// s.is_encoding == 1
 	return &req.encodingState
-}
-
-//export envoyGoOnTcpUpstreamConfig
-func envoyGoOnTcpUpstreamConfig(libraryIDPtr uint64, libraryIDLen uint64, configPtr uint64, configLen uint64) uint64 {
-	buf := utils.BytesToSlice(configPtr, configLen)
-	var any anypb.Any
-	proto.Unmarshal(buf, &any)
-
-	libraryID = strings.Clone(utils.BytesToString(libraryIDPtr, libraryIDLen))
-	configID := atomic.AddUint64(&configIDGenerator, 1)
-	configCache.Store(configID, GetTcpUpstreamConfigParser().ParseConfig(&any))
-
-	return configID
 }
 
 // //export envoyGoOnUpstreamConnectionReady

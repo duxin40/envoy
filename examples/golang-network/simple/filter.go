@@ -9,8 +9,6 @@ import (
 	"dubbo.apache.org/dubbo-go/v3/filter/generic/generalizer"
 	"github.com/envoyproxy/envoy/contrib/golang/common/go/api"
 
-	"github.com/envoyproxy/envoy/contrib/golang/upstreams/http/tcp/source/go/pkg/upstreams/http/tcp"
-
 	// "bytes"
 
 	// "dubbo.apache.org/dubbo-go/v3/protocol/dubbo/impl"
@@ -25,33 +23,45 @@ import (
 	// "mosn.io/htnn/api/pkg/filtermanager/api"
 )
 
-func init() {
-	tcp.RegisterTcpUpstreamConfigFactory("simple-network", cf)
-}
+// func init() {
+// 	tcp.RegisterTcpUpstreamFactoryAndConfigParser("simple-network", cf)
+// }
 
-var cf = &configFactory{}
+// var cf = &configFactory{}
 
-type configFactory struct{}
+// type configFactory struct{}
 
-func (f *configFactory) CreateFactoryFromConfig(config interface{}) tcp.FilterFactory {
-	return &filterFactory{}
-}
+// func (f *configFactory) CreateFactoryFromConfig(config interface{}) tcp.FilterFactory {
+// 	return &filterFactory{}
+// }
 
-type filterFactory struct {
-}
+// func (f *configFactory) Parse(any *anypb.Any, callbacks api.ConfigCallbackHandler) (interface{}, error) {
+// 	fmt.Println(fmt.Sprintf("get config: %+v", any.String()))
 
-func (f *filterFactory) CreateFilter() api.TcpUpstreamFilter {
-	return &tcpUpstreamFilter{}
-}
+// 	return nil
+// }
+
+// type filterFactory struct {
+// }
+
+// func (f *filterFactory) CreateFilter() api.TcpUpstreamFilter {
+// 	return &tcpUpstreamFilter{}
+// }
 
 type tcpUpstreamFilter struct {
 	api.EmptyTcpUpstreamFilter
 
-	cb api.ConnectionCallback
+	callbacks api.TcpUpstreamCallbackHandler
+	config    *config
 }
 
-func (*tcpUpstreamFilter) EncodeData(buffer api.BufferInstance, endOfStream bool) bool {
+func (f *tcpUpstreamFilter) EncodeData(buffer api.BufferInstance, endOfStream bool) bool {
 	fmt.Println("[http2rpc][EncodeData] start")
+	fmt.Println(fmt.Sprintf("[http2rpc][EncodeData] config: %+v", f.config))
+	fmt.Println(fmt.Sprintf("[http2rpc][EncodeData] route: %+v", f.callbacks.StreamInfo().GetRouteName()))
+	clusterName, _ := f.callbacks.StreamInfo().VirtualClusterName()
+	fmt.Println(fmt.Sprintf("[http2rpc][EncodeData] cluster: %+v", clusterName))
+	f.callbacks.EnableHalfClose(true)
 	fmt.Println(fmt.Sprintf("[http2rpc][EncodeData]req buffer: %+v", buffer.String()))
 
 	// mtdname := "sayName"
@@ -217,4 +227,4 @@ func getGeneralizer(generic string) (g generalizer.Generalizer) {
 	return
 }
 
-func main() {}
+// func main() {}

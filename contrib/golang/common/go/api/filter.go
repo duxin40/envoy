@@ -36,6 +36,10 @@ type (
 	EmptyUpstreamFilter struct{}
 	// EmptyTcpUpstreamFilter provides the no-op implementation of the EmptyTcpUpstreamFilter interface
 	EmptyTcpUpstreamFilter struct{}
+
+	PassThroughTcpUpstream struct {
+		EmptyTcpUpstreamFilter
+	}
 )
 
 // request
@@ -254,6 +258,12 @@ func (*EmptyUpstreamFilter) OnData(buffer []byte, endOfStream bool) FilterStatus
 func (*EmptyUpstreamFilter) OnEvent(event ConnectionEvent) {
 }
 
+type TcpUpstreamCallbackHandler interface {
+	FilterCallbackHandler
+	// EnableHalfClose only for upstream connection
+	EnableHalfClose(enabled bool)
+}
+
 type ConnectionCallback interface {
 	// StreamInfo returns the stream info of the connection
 	StreamInfo() StreamInfo
@@ -346,3 +356,12 @@ func (*EmptyTcpUpstreamFilter) OnUpstreamData(buffer BufferInstance, endOfStream
 }
 
 func (*EmptyTcpUpstreamFilter) OnEvent(event ConnectionEvent) {}
+
+type TcpUpstreamFactory func(config interface{}, callbacks TcpUpstreamCallbackHandler) TcpUpstreamFilter
+
+type TcpUpstreamConfigParser interface {
+	// Parse the proto message to any Go value, and return error to reject the config.
+	// This is called when Envoy receives the config from the control plane.
+	// Also, you can define Metrics through the callbacks, and the callbacks will be nil when parsing the route config.
+	Parse(any *anypb.Any, callbacks ConfigCallbackHandler) (interface{}, error)
+}
