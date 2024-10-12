@@ -56,13 +56,13 @@ type tcpUpstreamFilter struct {
 }
 
 func (f *tcpUpstreamFilter) EncodeData(buffer api.BufferInstance, endOfStream bool) bool {
-	fmt.Println("[http2rpc][EncodeData] start")
-	fmt.Println(fmt.Sprintf("[http2rpc][EncodeData] config: %+v", f.config))
-	fmt.Println(fmt.Sprintf("[http2rpc][EncodeData] route: %+v", f.callbacks.StreamInfo().GetRouteName()))
+	api.LogInfof("[http2rpc][EncodeData] start")
+	api.LogInfof("[http2rpc][EncodeData] route: %+v", f.callbacks.StreamInfo().GetRouteName())
 	clusterName, _ := f.callbacks.StreamInfo().VirtualClusterName()
-	fmt.Println(fmt.Sprintf("[http2rpc][EncodeData] cluster: %+v", clusterName))
+	api.LogInfof("[http2rpc][EncodeData] cluster: %+v", clusterName)
 	f.callbacks.EnableHalfClose(true)
-	fmt.Println(fmt.Sprintf("[http2rpc][EncodeData]req buffer: %+v", buffer.String()))
+	api.LogInfof("[http2rpc][EncodeData]req buffer: %+v", buffer.String())
+	api.LogInfof("[http2rpc][EncodeData] config: %+v", f.config)
 
 	// mtdname := "sayName"
 	// oldargs := map[string]interface{}{
@@ -137,7 +137,7 @@ func (f *tcpUpstreamFilter) EncodeData(buffer api.BufferInstance, endOfStream bo
 	// //api.LogInfof("[http2rpc][DecodeRequest] req: %+v", buf.String())
 	// _ = buffer.Set(buf.Bytes())
 
-	fmt.Println("[http2rpc][EncodeData] end")
+	api.LogInfof("[http2rpc][EncodeData] end")
 
 	return false
 }
@@ -148,21 +148,21 @@ const (
 	DUBBO_HEADER_SIZE   = 16
 )
 
-func (*tcpUpstreamFilter) OnUpstreamData(buffer api.BufferInstance, endOfStream bool) api.UpstreamDataStatus {
-	fmt.Println("[http2rpc][OnUpstreamData] start")
-	fmt.Println(fmt.Sprintf("[http2rpc][OnUpstreamData]resp buffer: %+v", buffer.String()))
+func (f *tcpUpstreamFilter) OnUpstreamData(buffer api.BufferInstance, endOfStream bool) api.UpstreamDataStatus {
+	api.LogInfof("golang-test [http2rpc][OnUpstreamData] start")
+	api.LogInfof("golang-test [http2rpc][OnUpstreamData]resp buffer len: %+v", buffer.Len())
 	if buffer.Len() < DUBBO_MAGIC_SIZE || binary.BigEndian.Uint16(buffer.Bytes()) != hessian.MAGIC {
 		//_ = data.Set([]byte(hessian.ErrIllegalPackage.Error()))
-		fmt.Printf("[http2rpc][OnUpstreamData] Magic error, buffer.Len(): %+v", buffer.Len())
+		api.LogInfof("golang-test [http2rpc][OnUpstreamData] Magic error, buffer.Len(): %+v", buffer.Len())
 		return api.UpstreamDataFailure
 	}
 	if buffer.Len() < hessian.HEADER_LENGTH {
-		fmt.Printf("[http2rpc][OnUpstreamData] Header length error, buffer.Len(): %+v", buffer.Len())
+		api.LogInfof("golang-test [http2rpc][OnUpstreamData] Header length error, buffer.Len(): %+v", buffer.Len())
 		return api.UpstreamDataFailure
 	}
 	bodyLength := binary.BigEndian.Uint32(buffer.Bytes()[DUBBO_LENGTH_OFFSET:])
 	if buffer.Len() < (int(bodyLength) + hessian.HEADER_LENGTH) {
-		fmt.Printf("[http2rpc][OnUpstreamData] Body length error, buffer.Len(): %+v", buffer.Len())
+		api.LogInfof("golang-test [http2rpc][OnUpstreamData] NeedMoreData for Body, buffer.Len(): %+v", buffer.Len())
 		return api.UpstreamDataContinue
 	}
 	// fmt.Printf("[http2rpc][OnUpstreamData] data: %+v", buffer)
@@ -206,7 +206,11 @@ func (*tcpUpstreamFilter) OnUpstreamData(buffer api.BufferInstance, endOfStream 
 	// _ = buffer.Set(bodyBytes)
 	// // f.RespHeader.Set("Content-Length", buffer.Len())
 
-	fmt.Printf("[http2rpc][OnUpstreamData] end, length: %+v", buffer.Len())
+	api.LogInfof("golang-test [http2rpc][OnUpstreamData] end, length: %+v", buffer.Len())
+
+	// api.LogInfof("[http2rpc][OnUpstreamData] end length: %+v", f.buf.Len())
+	// buffer.Set(f.buf.Bytes())
+	// api.LogInfof("[http2rpc][OnUpstreamData] end buffer: %+v", buffer.String())
 
 	return api.UpstreamDataFinish
 }

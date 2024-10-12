@@ -236,6 +236,9 @@ TcpUpstreamDsoImpl::TcpUpstreamDsoImpl(const std::string dso_name)
   loaded_ &= dlsymInternal<decltype(envoy_go_on_tcp_upstream_config_)>(
       envoy_go_on_tcp_upstream_config_, handler_, dso_name,
       "envoyGoOnTcpUpstreamConfig");
+  loaded_ &= dlsymInternal<decltype(envoy_go_tcp_upstream_destroy_http_plugin_config_)>(
+    envoy_go_tcp_upstream_destroy_http_plugin_config_, handler_, dso_name,
+    "envoyGoFilterDestroyHttpPluginConfig");
   loaded_ &= dlsymInternal<decltype(envoy_go_on_encode_data_)>(
     envoy_go_on_encode_data_, handler_, dso_name, "envoyGoEncodeData");
   loaded_ &= dlsymInternal<decltype(envoy_go_on_upstream_data_)>(
@@ -245,6 +248,11 @@ TcpUpstreamDsoImpl::TcpUpstreamDsoImpl(const std::string dso_name)
 GoUint64 TcpUpstreamDsoImpl::envoyGoOnTcpUpstreamConfig(httpConfig* p0) {
   ASSERT(envoy_go_on_tcp_upstream_config_ != nullptr);
   return envoy_go_on_tcp_upstream_config_(p0);
+}
+
+void TcpUpstreamDsoImpl::envoyGoTcpUpstreamDestroyHttpPluginConfig(GoUint64 p0, GoInt p1) {
+  ASSERT(envoy_go_tcp_upstream_destroy_http_plugin_config_ != nullptr);
+  return envoy_go_tcp_upstream_destroy_http_plugin_config_(p0, p1);
 }
 
 GoUint64 TcpUpstreamDsoImpl::envoyGoEncodeData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) {

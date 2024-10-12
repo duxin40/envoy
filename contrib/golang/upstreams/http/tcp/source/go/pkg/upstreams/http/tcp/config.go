@@ -97,8 +97,8 @@ func envoyGoOnTcpUpstreamConfig(c *C.httpConfig) uint64 {
 	return configNum
 }
 
-//export envoyGoFilterDestroyHttpPluginConfig
-func envoyGoFilterDestroyHttpPluginConfig(id uint64, needDelay int) {
+//export envoyGoTcpUpstreamDestroyHttpPluginConfig
+func envoyGoTcpUpstreamDestroyHttpPluginConfig(id uint64, needDelay int) {
 	if needDelay == 1 {
 		// there is a concurrency race in the c++ side:
 		// 1. when A envoy worker thread is using the cached merged_config_id_ and it will call into Go after some time.

@@ -110,12 +110,10 @@ type TcpUpstreamCAPI interface {
 	HttpSetBytesBufferHelper(s unsafe.Pointer, bufferPtr uint64, value []byte, action BufferAction)
 	HttpGetStringValue(r unsafe.Pointer, id int) (string, bool)
 
+	HttpFinalize(r unsafe.Pointer, reason int)
+
 	// /* These APIs are related to config, use the pointer of config. */
-	// HttpDefineMetric(c unsafe.Pointer, metricType MetricType, name string) uint32
-	// HttpIncrementMetric(c unsafe.Pointer, metricId uint32, offset int64)
-	// HttpGetMetric(c unsafe.Pointer, metricId uint32) uint64
-	// HttpRecordMetric(c unsafe.Pointer, metricId uint32, value uint64)
-	// HttpConfigFinalize(c unsafe.Pointer)
+	HttpConfigFinalize(c unsafe.Pointer)
 
 	/* These APIs have nothing to do with request */
 	HttpLog(level LogType, message string)

@@ -32,18 +32,6 @@ namespace Http {
 namespace Tcp {
 namespace Golang {
 
-enum class DubboFrameDecodeStatus : uint8_t {
-  Ok = 0,
-  NeedMoreData = 1,
-  InvalidHeader = 2,
-};
-
-constexpr uint64_t DUBBO_HEADER_SIZE = 16;
-constexpr uint64_t DUBBO_MAGIC_SIZE = 2;
-constexpr uint16_t DUBBO_MAGIC_NUMBER = 0xdabb;
-constexpr uint64_t DUBBO_LENGTH_OFFSET = 12;
-constexpr absl::string_view ProtocolErrorMessage = "Not dubbo message";
-
 class TcpUpstream;
 
 class FilterConfig;
@@ -62,41 +50,16 @@ using FilterConfigSharedPtr = std::shared_ptr<FilterConfig>;
 class FilterConfig : public std::enable_shared_from_this<FilterConfig>,
                      Logger::Loggable<Logger::Id::http> {
 public:
-  FilterConfig(
-      const envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config proto_config, Dso::TcpUpstreamDsoPtr dso_lib)
-      : plugin_name_(proto_config.plugin_name()), so_id_(proto_config.library_id()),
-        so_path_(proto_config.library_path()), plugin_config_(proto_config.plugin_config()), dso_lib_(dso_lib){};
-  // ~FilterConfig();
+  FilterConfig(const envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config proto_config,
+   Dso::TcpUpstreamDsoPtr dso_lib);
+  ~FilterConfig();
 
   const std::string& soId() const { return so_id_; }
   const std::string& soPath() const { return so_path_; }
   const std::string& pluginName() const { return plugin_name_; }
   uint64_t getConfigId() { return config_id_; };
 
-  void newGoPluginConfig() {
-    ENVOY_LOG(debug, "initializing golang filter config");
-    std::string buf;
-    auto res = plugin_config_.SerializeToString(&buf);
-    ASSERT(res, "SerializeToString should always successful");
-    auto buf_ptr = reinterpret_cast<unsigned long long>(buf.data());
-    auto name_ptr = reinterpret_cast<unsigned long long>(plugin_name_.data());
-
-    config_ = new HttpConfigInternal(weak_from_this());
-    config_->plugin_name_ptr = name_ptr;
-    config_->plugin_name_len = plugin_name_.length();
-    config_->config_ptr = buf_ptr;
-    config_->config_len = buf.length();
-    config_->is_route_config = 0;
-
-    config_id_ = dso_lib_->envoyGoOnTcpUpstreamConfig(config_);
-
-    if (config_id_ == 0) {
-      throw EnvoyException(
-          fmt::format("golang filter failed to parse plugin config: {} {}", so_id_, so_path_));
-    }
-
-    ENVOY_LOG(debug, "golang filter new plugin config, id: {}", config_id_);
-  }
+  void newGoPluginConfig();
 
 private:
   const std::string plugin_name_;
@@ -155,42 +118,7 @@ class TcpConnPool : public Router::GenericConnPool,
                     Logger::Loggable<Logger::Id::golang> {
 public:
   TcpConnPool(Upstream::ThreadLocalCluster& thread_local_cluster,
-              Upstream::ResourcePriority priority, Upstream::LoadBalancerContext* ctx, const Protobuf::Message& config) {
-    conn_pool_data_ = thread_local_cluster.tcpConnPool(priority, ctx);
-
-    envoy::extensions::upstreams::http::tcp::golang::v3alpha::Config c;
-    
-    ProtobufWkt::Any any;
-    any.ParseFromString(config.SerializeAsString());
-    ENVOY_LOG(debug, "get cluster any value: {}", any.value());
-
-    auto s = c.ParseFromString(any.value());
-    ASSERT(s, "any.value() ParseFromString should always successful");
-
-    std::string config_str;
-    auto res = c.plugin_config().SerializeToString(&config_str);
-    ASSERT(res, "plugin_config SerializeToString should always successful");
-
-    ENVOY_LOG(debug, "load tcp_upstream_golang library at parse config: {} {}", c.library_id(), c.library_path());
-
-    // loads DSO store a static map and a open handles leak will occur when the filter gets loaded and
-    // unloaded.
-    // TODO: unload DSO when filter updated.
-    auto dso_lib = Dso::DsoManager<Dso::TcpUpstreamDsoImpl>::load(c.library_id(), c.library_path(), c.plugin_name());
-    if (dso_lib == nullptr) {
-      throw EnvoyException(fmt::format("tcp_upstream_golang: load library failed: {} {}", c.library_id(), c.library_path()));
-    };
-
-    dynamic_lib_ = dso_lib;
-
-    if (dynamic_lib_) {
-      FilterConfigSharedPtr config = std::make_shared<FilterConfig>(c, dynamic_lib_);
-      config->newGoPluginConfig();
-      config_ = config;
-    }
-    plugin_name_ = c.plugin_name();
-
-  }
+              Upstream::ResourcePriority priority, Upstream::LoadBalancerContext* ctx, const Protobuf::Message& config);
   void newStream(Router::GenericConnectionPoolCallbacks* callbacks) override {
     callbacks_ = callbacks;
     upstream_handle_ = conn_pool_data_.value().newConnection(*this);
@@ -279,7 +207,6 @@ public:
   const Router::RouteEntry* route_entry_;
 
 private:
-  DubboFrameDecodeStatus decodeDubboFrame(Buffer::Instance& data);
   // return true when it is first inited.
   bool initRequest();
 

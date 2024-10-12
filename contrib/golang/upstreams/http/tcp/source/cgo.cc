@@ -78,6 +78,22 @@ CAPIStatus envoyGoTcpUpstreamHandlerWrapper(void* r,
   return CAPIStatus::CAPIFilterIsGone;
 }
 
+void envoyGoTcpUpstreamFinalize(void* r, int reason) {
+  UNREFERENCED_PARAMETER(reason);
+  // req is used by go, so need to use raw memory and then it is safe to release at the gc finalize
+  // phase of the go object.
+  auto req = reinterpret_cast<RequestInternal*>(r);
+  // TODO defer delete req
+  delete req;
+}
+
+void envoyGoConfigTcpUpstreamFinalize(void* c) {
+  // config is used by go, so need to use raw memory and then it is safe to release at the gc
+  // finalize phase of the go object.
+  auto config = reinterpret_cast<HttpConfigInternal*>(c);
+  delete config;
+}
+
 CAPIStatus envoyGoTcpUpstreamGetBuffer(void* s, uint64_t buffer_ptr, void* data) {
   return envoyGoTcpUpstreamProcessStateHandlerWrapper(
       s, [buffer_ptr, data](std::shared_ptr<TcpUpstream>& filter, ProcessorState& state) -> CAPIStatus {

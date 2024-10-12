@@ -250,7 +250,7 @@ func (r *httpRequest) GetProperty(key string) (string, error) {
 }
 
 func (r *httpRequest) Finalize(reason int) {
-	panic("please implement me")
+	cAPI.HttpFinalize(unsafe.Pointer(r), reason)
 }
 
 func (s *httpRequest) EnableHalfClose(enabled bool) {
@@ -362,7 +362,7 @@ type tcpUpstreamConfig struct {
 }
 
 func (c *tcpUpstreamConfig) Finalize() {
-	panic("please implement me")
+	cAPI.HttpConfigFinalize(unsafe.Pointer(c.config))
 }
 
 func (c *tcpUpstreamConfig) DefineCounterMetric(name string) api.CounterMetric {
