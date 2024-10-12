@@ -154,6 +154,15 @@ func (c *cgoApiImpl) HttpGetStringValue(r unsafe.Pointer, id int) (string, bool)
 	return strings.Clone(value), true
 }
 
+func (c *cgoApiImpl) HttpFinalize(r unsafe.Pointer, reason int) {
+	req := (*httpRequest)(r)
+	C.envoyGoTcpUpstreamHttpFinalize(unsafe.Pointer(req.req), C.int(reason))
+}
+
+func (c *cgoApiImpl) HttpConfigFinalize(cfg unsafe.Pointer) {
+	C.envoyGoConfigTcpUpstreamFinalize(cfg)
+}
+
 func (c *cgoApiImpl) HttpLog(level api.LogType, message string) {
 	C.envoyGoFilterLog(C.uint32_t(level), unsafe.Pointer(unsafe.StringData(message)), C.int(len(message)))
 }
