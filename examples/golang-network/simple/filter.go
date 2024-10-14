@@ -1,234 +1,132 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
-	"strings"
+	"net"
 
-	"dubbo.apache.org/dubbo-go/v3/common/constant"
-	"dubbo.apache.org/dubbo-go/v3/filter/generic/generalizer"
+	xds "github.com/cncf/xds/go/xds/type/v3"
+	"google.golang.org/protobuf/types/known/anypb"
+
 	"github.com/envoyproxy/envoy/contrib/golang/common/go/api"
-
-	// "bytes"
-
-	// "dubbo.apache.org/dubbo-go/v3/protocol/dubbo/impl"
-
-	// "cgw.cestc.cn/gateway-control-plane/pkg/plugins/stream"
-
-	// "dubbo.apache.org/dubbo-go/v3/protocol"
-
-	// "encoding/json"
-	hessian "github.com/apache/dubbo-go-hessian2"
-	// "github.com/dubbogo/gost/log/logger"
-	// "mosn.io/htnn/api/pkg/filtermanager/api"
+	"github.com/envoyproxy/envoy/contrib/golang/filters/network/source/go/pkg/network"
 )
 
-// func init() {
-// 	tcp.RegisterTcpUpstreamFactoryAndConfigParser("simple-network", cf)
-// }
-
-// var cf = &configFactory{}
-
-// type configFactory struct{}
-
-// func (f *configFactory) CreateFactoryFromConfig(config interface{}) tcp.FilterFactory {
-// 	return &filterFactory{}
-// }
-
-// func (f *configFactory) Parse(any *anypb.Any, callbacks api.ConfigCallbackHandler) (interface{}, error) {
-// 	fmt.Println(fmt.Sprintf("get config: %+v", any.String()))
-
-// 	return nil
-// }
-
-// type filterFactory struct {
-// }
-
-// func (f *filterFactory) CreateFilter() api.TcpUpstreamFilter {
-// 	return &tcpUpstreamFilter{}
-// }
-
-type tcpUpstreamFilter struct {
-	api.EmptyTcpUpstreamFilter
-
-	callbacks api.TcpUpstreamCallbackHandler
-	config    *config
+func init() {
+	network.RegisterNetworkFilterConfigFactory("simple", cf)
 }
 
-func (f *tcpUpstreamFilter) EncodeData(buffer api.BufferInstance, endOfStream bool) bool {
-	api.LogInfof("[http2rpc][EncodeData] start")
-	api.LogInfof("[http2rpc][EncodeData] route: %+v", f.callbacks.StreamInfo().GetRouteName())
-	clusterName, _ := f.callbacks.StreamInfo().VirtualClusterName()
-	api.LogInfof("[http2rpc][EncodeData] cluster: %+v", clusterName)
-	f.callbacks.EnableHalfClose(true)
-	api.LogInfof("[http2rpc][EncodeData]req buffer: %+v", buffer.String())
-	api.LogInfof("[http2rpc][EncodeData] config: %+v", f.config)
+var cf = &configFactory{}
 
-	// mtdname := "sayName"
-	// oldargs := map[string]interface{}{
-	// 	"name": "jackduxinxxx",
-	// }
-	// fmt.Println("[http2rpc][EncodeData] start1")
+type configFactory struct{}
 
-	// types := make([]string, 0, len(oldargs))
-	// args := make([]hessian.Object, 0, len(oldargs))
-	// attchments := map[string]interface{}{
-	// 	constant.GenericKey:   constant.GenericSerializationDefault,
-	// 	constant.InterfaceKey: "com.alibaba.nacos.example.dubbo.service.DemoService",
-	// 	constant.MethodKey:    mtdname,
-	// }
+func (f *configFactory) CreateFactoryFromConfig(config interface{}) network.FilterFactory {
+	a := config.(*anypb.Any)
+	configStruct := &xds.TypedStruct{}
+	_ = a.UnmarshalTo(configStruct)
 
-	// g := getGeneralizer(constant.GenericSerializationDefault)
+	v := configStruct.Value.AsMap()["echo_server_addr"]
+	addr, err := net.LookupHost(v.(string))
+	if err != nil {
+		fmt.Printf("fail to resolve: %v, err: %v\n", v.(string), err)
+		return nil
+	}
+	upAddr := addr[0] + ":1025"
 
-	// for _, arg := range oldargs {
-	// 	// use the default generalizer(MapGeneralizer)
-	// 	typ, err := g.GetType(arg)
-	// 	if err != nil {
-	// 		fmt.Printf("failed to get type, %v", err)
-	// 	}
-	// 	obj, err := g.Generalize(arg)
-	// 	if err != nil {
-	// 		fmt.Printf("generalization failed, %v", err)
-	// 		return false
-	// 	}
-	// 	types = append(types, typ)
-	// 	args = append(args, obj)
-	// }
-
-	// // construct a new invocation for generic call
-	// newArgs := []interface{}{
-	// 	mtdname,
-	// 	types,
-	// 	args,
-	// }
-	// newIvc := invocation2.NewRPCInvocation(constant.Generic, newArgs, attchments)
-	// //newIvc.SetReply(genericInvocation.Reply())
-	// //newIvc.Attachments()[constant.GenericKey] = invoker.GetURL().GetParam(constant.GenericKey, "")
-	// newIvc.SetAttachment(constant.PathKey, "com.alibaba.nacos.example.dubbo.service.DemoService")
-	// newIvc.SetAttachment(constant.InterfaceKey, "com.alibaba.nacos.example.dubbo.service.DemoService")
-	// newIvc.SetAttachment(constant.VersionKey, "1.0.0")
-	// //newIvc.SetAttachment(constant.GroupKey, "DEFAULT_GROUP")
-	// //newIvc.SetAttachment(constant.ServiceKey, "demoService")
-	// fmt.Printf("newIvc: %+v", newIvc)
-	// fmt.Println("[http2rpc][EncodeData] start222")
-
-	// codec := &dubbo2.DubboCodec{}
-	// req := remoting.NewRequest("2.0.2")
-
-	// req.ID = 1
-	// rsp := remoting.NewPendingResponse(req.ID)
-	// rsp.Reply = newIvc.Reply()
-	// remoting.AddPendingResponse(rsp)
-
-	// req.Data = newIvc
-	// req.Event = false
-	// req.TwoWay = true
-	// buf, err := codec.EncodeRequest(req)
-	// if err != nil {
-	// 	fmt.Printf("failed to encode request, req: %+v, buf: %+v, err: %+v", req.Data, buf, err)
-	// 	return false
-	// 	// return &api.LocalResponse{
-	// 	// 	Code:   500,
-	// 	// 	Msg:    "failed to encode dubbo request",
-	// 	// 	Header: nil,
-	// 	// }
-	// }
-
-	// //api.LogInfof("[http2rpc][DecodeRequest] req: %+v", buf.String())
-	// _ = buffer.Set(buf.Bytes())
-
-	api.LogInfof("[http2rpc][EncodeData] end")
-
-	return false
+	return &filterFactory{
+		upAddr: upAddr,
+	}
 }
 
-const (
-	DUBBO_LENGTH_OFFSET = 12
-	DUBBO_MAGIC_SIZE    = 2
-	DUBBO_HEADER_SIZE   = 16
-)
-
-func (f *tcpUpstreamFilter) OnUpstreamData(buffer api.BufferInstance, endOfStream bool) api.UpstreamDataStatus {
-	api.LogInfof("golang-test [http2rpc][OnUpstreamData] start")
-	api.LogInfof("golang-test [http2rpc][OnUpstreamData]resp buffer len: %+v", buffer.Len())
-	if buffer.Len() < DUBBO_MAGIC_SIZE || binary.BigEndian.Uint16(buffer.Bytes()) != hessian.MAGIC {
-		//_ = data.Set([]byte(hessian.ErrIllegalPackage.Error()))
-		api.LogInfof("golang-test [http2rpc][OnUpstreamData] Magic error, buffer.Len(): %+v", buffer.Len())
-		return api.UpstreamDataFailure
-	}
-	if buffer.Len() < hessian.HEADER_LENGTH {
-		api.LogInfof("golang-test [http2rpc][OnUpstreamData] Header length error, buffer.Len(): %+v", buffer.Len())
-		return api.UpstreamDataFailure
-	}
-	bodyLength := binary.BigEndian.Uint32(buffer.Bytes()[DUBBO_LENGTH_OFFSET:])
-	if buffer.Len() < (int(bodyLength) + hessian.HEADER_LENGTH) {
-		api.LogInfof("golang-test [http2rpc][OnUpstreamData] NeedMoreData for Body, buffer.Len(): %+v", buffer.Len())
-		return api.UpstreamDataContinue
-	}
-	// fmt.Printf("[http2rpc][OnUpstreamData] data: %+v", buffer)
-	// fmt.Printf("[http2rpc][OnUpstreamData] data: %+v", string(buffer.Bytes()[DUBBO_HEADER_SIZE:]))
-
-	// 读取Dubbo消息的长度
-	// dubboDataLength := int(binary.BigEndian.Uint32(buffer.Bytes()[DUBBO_LENGTH_OFFSET :]))
-	// // data.Drain(DUBBO_HEADER_SIZE)
-	// dubboBody := buffer.Bytes()[DUBBO_HEADER_SIZE : DUBBO_HEADER_SIZE+dubboDataLength]
-	// api.LogInfof("[http2rpc][EncodeData] dubboBody: %+v", string(dubboBody))
-
-	//data.Drain(16)
-
-	// // 开始正事
-	// codec := &dubbo2.DubboCodec{}
-	// result, _, err := codec.Decode(buffer.Bytes())
-	// api.LogInfof("[http2rpc][EncodeResponse] codec.Decode, err: %+v", err)
-	// r := result.Result.(*remoting.Response)
-	// jsonBytes, _ := json.Marshal(r.Result.(protocol.RPCResult))
-	// _ = buffer.Set(jsonBytes)
-
-	// buf := bytes.NewBuffer(buffer.Bytes())
-	// pkg := impl.NewDubboPackage(buf)
-	// err := pkg.Unmarshal()
-	// if err != nil {
-	// 	api.LogInfof("[http2rpc][EncodeResponse] Unmarshal, err: %+v", err)
-	// }
-
-	// b := buffer.Bytes()[DUBBO_HEADER_SIZE:]
-	// decoder := hessian.NewDecoder(b)
-	// _, err := decoder.Decode()
-	// if err != nil {
-	// 	panic(fmt.Sprintf("[http2rpc][OnUpstreamData] Decode, err: %+v", err))
-	// }
-	// rsp, err := decoder.Decode()
-	// if err != nil {
-	// 	panic(fmt.Sprintf("[http2rpc][OnUpstreamData] Decode-2, err: %+v", err))
-	// }
-	// // fmt.Printf("[http2rpc][OnUpstreamData] Decode, val: %+v", rsp)
-	// bodyBytes := []byte(fmt.Sprintf("%s", rsp))
-	// _ = buffer.Set(bodyBytes)
-	// // f.RespHeader.Set("Content-Length", buffer.Len())
-
-	api.LogInfof("golang-test [http2rpc][OnUpstreamData] end, length: %+v", buffer.Len())
-
-	// api.LogInfof("[http2rpc][OnUpstreamData] end length: %+v", f.buf.Len())
-	// buffer.Set(f.buf.Bytes())
-	// api.LogInfof("[http2rpc][OnUpstreamData] end buffer: %+v", buffer.String())
-
-	return api.UpstreamDataFinish
+type filterFactory struct {
+	upAddr string
 }
 
-func (*tcpUpstreamFilter) OnEvent(event api.ConnectionEvent) {}
-
-func getGeneralizer(generic string) (g generalizer.Generalizer) {
-	switch strings.ToLower(generic) {
-	case constant.GenericSerializationDefault:
-		g = generalizer.GetMapGeneralizer()
-	case constant.GenericSerializationGson:
-		g = generalizer.GetGsonGeneralizer()
-
-	default:
-		fmt.Printf("\"%s\" is not supported, use the default generalizer(MapGeneralizer)", generic)
-		g = generalizer.GetMapGeneralizer()
+func (f *filterFactory) CreateFilter(cb api.ConnectionCallback) api.DownstreamFilter {
+	return &downFilter{
+		upAddr: f.upAddr,
+		cb:     cb,
 	}
-	return
 }
 
-// func main() {}
+type downFilter struct {
+	api.EmptyDownstreamFilter
+
+	cb       api.ConnectionCallback
+	upAddr   string
+	upFilter *upFilter
+}
+
+func (f *downFilter) OnNewConnection() api.FilterStatus {
+	localAddr, _ := f.cb.StreamInfo().UpstreamLocalAddress()
+	remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
+	fmt.Printf("OnNewConnection, local: %v, remote: %v, connect to: %v\n", localAddr, remoteAddr, f.upAddr)
+	f.upFilter = &upFilter{
+		downFilter: f,
+		ch:         make(chan []byte, 1),
+	}
+	network.CreateUpstreamConn(f.upAddr, f.upFilter)
+	return api.NetworkFilterContinue
+}
+
+func (f *downFilter) OnData(buffer []byte, endOfStream bool) api.FilterStatus {
+	remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
+	fmt.Printf("OnData, addr: %v, buffer: %v, endOfStream: %v\n", remoteAddr, string(buffer), endOfStream)
+	buffer = append([]byte("hello, "), buffer...)
+	f.upFilter.ch <- buffer
+	return api.NetworkFilterContinue
+}
+
+func (f *downFilter) OnEvent(event api.ConnectionEvent) {
+	remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
+	fmt.Printf("OnEvent, addr: %v, event: %v\n", remoteAddr, event)
+}
+
+func (f *downFilter) OnWrite(buffer []byte, endOfStream bool) api.FilterStatus {
+	fmt.Printf("OnWrite, buffer: %v, endOfStream: %v\n", string(buffer), endOfStream)
+	return api.NetworkFilterContinue
+}
+
+type upFilter struct {
+	api.EmptyUpstreamFilter
+
+	cb         api.ConnectionCallback
+	downFilter *downFilter
+	ch         chan []byte
+}
+
+func (f *upFilter) OnPoolReady(cb api.ConnectionCallback) {
+	f.cb = cb
+	f.cb.EnableHalfClose(false)
+	localAddr, _ := f.cb.StreamInfo().UpstreamLocalAddress()
+	remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
+	fmt.Printf("OnPoolReady, local: %v, remote: %v\n", localAddr, remoteAddr)
+	go func() {
+		for {
+			buf, ok := <-f.ch
+			if !ok {
+				return
+			}
+			f.cb.Write(buf, false)
+		}
+	}()
+}
+
+func (f *upFilter) OnPoolFailure(poolFailureReason api.PoolFailureReason, transportFailureReason string) {
+	fmt.Printf("OnPoolFailure, reason: %v, transportFailureReason: %v\n", poolFailureReason, transportFailureReason)
+}
+
+func (f *upFilter) OnData(buffer []byte, endOfStream bool) {
+	remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
+	fmt.Printf("OnData, addr: %v, buffer: %v, endOfStream: %v\n", remoteAddr, string(buffer), endOfStream)
+	f.downFilter.cb.Write(buffer, endOfStream)
+}
+
+func (f *upFilter) OnEvent(event api.ConnectionEvent) {
+	remoteAddr, _ := f.cb.StreamInfo().UpstreamRemoteAddress()
+	fmt.Printf("OnEvent, addr: %v, event: %v\n", remoteAddr, event)
+	if event == api.LocalClose || event == api.RemoteClose {
+		close(f.ch)
+	}
+}
+
+func main() {}
