@@ -72,5 +72,3 @@ lerna-debug.log*
 node_modules
 dist
 *.bak
-examples/golang-tcp-upstream/simple/vendor
-examples/golang-tcp-upstream/golang-http-http2dubbo/simple/vendor
