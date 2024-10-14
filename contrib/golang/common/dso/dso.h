@@ -199,10 +199,14 @@ public:
   ~TcpUpstreamDso() override = default;
 
   virtual GoUint64 envoyGoOnTcpUpstreamConfig(httpConfig* p0) PURE;
-  virtual void envoyGoTcpUpstreamDestroyHttpPluginConfig(GoUint64 p0, GoInt p1) PURE;
+
+  virtual void envoyGoTcpUpstreamDestroyPluginConfig(GoUint64 p0, GoInt p1) PURE;
+
   virtual GoUint64 envoyGoEncodeData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) PURE;
 
   virtual GoUint64 envoyGoOnUpstreamData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) PURE;
+
+  virtual void envoyGoOnTcpUpstreamDestroy(httpRequest* p0, int p1) PURE;
 
 };
 
@@ -213,19 +217,24 @@ public:
 
   GoUint64 envoyGoOnTcpUpstreamConfig(httpConfig* p0) override;
 
-  void envoyGoTcpUpstreamDestroyHttpPluginConfig(GoUint64 p0, GoInt p1) override;
+  void envoyGoTcpUpstreamDestroyPluginConfig(GoUint64 p0, GoInt p1) override;
 
   GoUint64 envoyGoEncodeData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) override;
 
   GoUint64 envoyGoOnUpstreamData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) override;
 
+  void envoyGoOnTcpUpstreamDestroy(httpRequest* p0, int p1) override;
+
 private:
   GoUint64 (*envoy_go_on_tcp_upstream_config_)(httpConfig* p0) = {nullptr};
-  void (*envoy_go_tcp_upstream_destroy_http_plugin_config_)(GoUint64 p0, GoInt p1) = {nullptr};
+
+  void (*envoy_go_tcp_upstream_destroy_plugin_config_)(GoUint64 p0, GoInt p1) = {nullptr};
 
   GoUint64 (*envoy_go_on_encode_data_)(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) = {nullptr};
                                             
   GoUint64 (*envoy_go_on_upstream_data_)(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len) = {nullptr};
+
+  void (*envoy_go_on_tcp_upstream_destroy_)(httpRequest* p0, GoUint64 p1) = {nullptr};
 };
 
 using TcpUpstreamDsoPtr = std::shared_ptr<TcpUpstreamDso>;
