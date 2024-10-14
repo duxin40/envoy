@@ -81,7 +81,7 @@ CONTRIB_EXTENSIONS = {
     # xDS delegates
     #
 
-    "envoy.xds_delegates.wkv_store":                            "//contrib/config/source:kv_store_xds_delegate",
+    "envoy.xds_delegates.kv_store":                            "//contrib/config/source:kv_store_xds_delegate",
 
     #
     # cluster specifier plugin
