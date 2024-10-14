@@ -190,8 +190,8 @@ extern GoUint64 envoyGoOnTcpUpstreamConfig(GoUint64 library_id_ptr, GoUint64 lib
                                                    GoUint64 config_ptr, GoUint64 config_len);
 
 // go:linkname envoyGoTcpUpstreamDestroyHttpPluginConfig
-// github.com/envoyproxy/envoy/contrib/golang/filters/http/source/go/pkg/http.envoyGoTcpUpstreamDestroyHttpPluginConfig
-extern void envoyGoTcpUpstreamDestroyHttpPluginConfig(GoUint64 id, GoInt need_delay);                                                   
+// github.com/envoyproxy/envoy/contrib/golang/filters/http/source/go/pkg/http.envoyGoTcpUpstreamDestroyPluginConfig
+extern void envoyGoTcpUpstreamDestroyPluginConfig(GoUint64 id, GoInt need_delay);                                                   
 
 // go:linkname envoyGoEncodeData
 // github.com/envoyproxy/envoy/contrib/golang/filters/upstreams/http/tcp/source/go/pkg/upstreams/http/tcp.envoyGoEncodeData
@@ -200,6 +200,10 @@ extern GoUint64 envoyGoEncodeData(processState* state, GoUint64 end_stream, GoUi
 // go:linkname envoyGoOnUpstreamData
 // github.com/envoyproxy/envoy/contrib/golang/filters/upstreams/http/tcp/source/go/pkg/upstreams/http/tcp.envoyGoOnUpstreamData
 extern GoUint64 envoyGoOnUpstreamData(processState* state, GoUint64 end_stream, GoUint64 buf_ptr, GoUint64 buf_len);
+
+// go:linkname envoyGoOnTcpUpstreamDestroy
+// github.com/envoyproxy/envoy/contrib/golang/filters/upstreams/http/tcp/source/go/pkg/upstreams/http/tcp.envoyGoOnTcpUpstreamDestroy
+extern void envoyGoOnTcpUpstreamDestroy(httpRequest* r, GoUint64 reason);
 
 #ifdef __cplusplus
 }

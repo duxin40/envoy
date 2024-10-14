@@ -160,6 +160,25 @@ private:
   FilterConfigSharedPtr config_;
 };
 
+enum class EndStreamType {
+	NotEndStream,
+	EndStream,
+};
+
+enum class UpstreamDataStatus {
+	// Continue to deal with further data.
+	UpstreamDataContinue,
+	// Finish dealing with data.
+	UpstreamDataFinish,
+	// Failure when dealing with data.
+	UpstreamDataFailure,
+};
+
+enum class DestroyReason {
+  Normal,
+  Terminate,
+};
+
 enum class EnvoyValue {
   RouteName = 1,
   ClusterName,
@@ -173,6 +192,7 @@ public:
   TcpUpstream(Router::UpstreamToDownstream* upstream_request,
               Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& upstream, Dso::TcpUpstreamDsoPtr dynamic_lib,
               FilterConfigSharedPtr config);
+  ~TcpUpstream() override;            
 
   // GenericUpstream
   void encodeData(Buffer::Instance& data, bool end_stream) override;
@@ -221,16 +241,9 @@ private:
   FilterConfigSharedPtr config_;
 
   RequestInternal* req_{nullptr};
-  // The state of the filter on both the encoding and decoding side.
-  // They are stored in HttpRequestInternal since Go need to read them,
-  // And it's safe to read them before onDestroy in C++ side.
+
   EncodingProcessorState& encoding_state_;
   DecodingProcessorState& decoding_state_;
-
-  // lock for has_destroyed_/etc, to avoid race between envoy c thread and go thread (when calling
-  // back from go).
-  Thread::MutexBasicLockable mutex_{};
-  bool has_destroyed_ ABSL_GUARDED_BY(mutex_){false};
 };
 
 

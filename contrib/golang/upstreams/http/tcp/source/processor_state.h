@@ -49,36 +49,10 @@ private:
 
 // This describes the processor state.
 enum class FilterState {
-  // Waiting header
-  WaitingHeader,
-  // Processing header in Go
-  ProcessingHeader,
-  // Waiting data
-  WaitingData,
-  // Waiting all data
-  WaitingAllData,
   // Processing data in Go
   ProcessingData,
-  // Waiting trailer
-  WaitingTrailer,
-  // Processing trailer in Go
-  ProcessingTrailer,
   // All done
   Done,
-};
-
-/**
- * An enum specific for Golang status.
- */
-enum class GolangStatus {
-  Running,
-  // after called sendLocalReply
-  LocalReply,
-  // Continue filter chain iteration.
-  Continue,
-  StopAndBuffer,
-  StopAndBufferWatermark,
-  StopNoBuffer,
 };
 
 class ProcessorState : public processState, public Logger::Loggable<Logger::Id::http>, NonCopyable {
@@ -92,14 +66,10 @@ public:
   FilterState filterState() const { return static_cast<FilterState>(state); }
   void setFilterState(FilterState st) { state = static_cast<int>(st); }
   bool isProcessingInGo() {
-    return filterState() == FilterState::ProcessingHeader ||
-           filterState() == FilterState::ProcessingData ||
-           filterState() == FilterState::ProcessingTrailer;
+    return filterState() == FilterState::ProcessingData;
   }
 
   /* data buffer */
-  // add data to state buffer
-  // virtual void addBufferData(Buffer::Instance& data) PURE;
   // get state buffer
   Buffer::Instance& getBufferData() { return *data_buffer_.get(); };
   bool isBufferDataEmpty() { return data_buffer_ == nullptr || data_buffer_->length() == 0; };

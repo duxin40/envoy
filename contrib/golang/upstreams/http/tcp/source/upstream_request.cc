@@ -30,12 +30,12 @@ FilterConfig::FilterConfig(
 
 FilterConfig::~FilterConfig() {
   if (config_id_ > 0) {
-    dso_lib_->envoyGoTcpUpstreamDestroyHttpPluginConfig(config_id_, 0);
+    dso_lib_->envoyGoTcpUpstreamDestroyPluginConfig(config_id_, 0);
   }
 }
 
 void FilterConfig::newGoPluginConfig() {
-  ENVOY_LOG(debug, "initializing golang filter config");
+  ENVOY_LOG(debug, "tcp upstream initializing golang filter config");
   std::string buf;
   auto res = plugin_config_.SerializeToString(&buf);
   ASSERT(res, "SerializeToString should always successful");
@@ -56,7 +56,7 @@ void FilterConfig::newGoPluginConfig() {
         fmt::format("golang filter failed to parse plugin config: {} {}", so_id_, so_path_));
   }
 
-  ENVOY_LOG(debug, "golang filter new plugin config, id: {}", config_id_);
+  ENVOY_LOG(debug, "tcp upstream new plugin config, id: {}", config_id_);
 }
 
 TcpConnPool::TcpConnPool(Upstream::ThreadLocalCluster& thread_local_cluster, 
@@ -67,7 +67,6 @@ TcpConnPool::TcpConnPool(Upstream::ThreadLocalCluster& thread_local_cluster,
     
     ProtobufWkt::Any any;
     any.ParseFromString(config.SerializeAsString());
-    ENVOY_LOG(debug, "get cluster any value: {}", any.value());
 
     auto s = c.ParseFromString(any.value());
     ASSERT(s, "any.value() ParseFromString should always successful");
@@ -76,14 +75,14 @@ TcpConnPool::TcpConnPool(Upstream::ThreadLocalCluster& thread_local_cluster,
     auto res = c.plugin_config().SerializeToString(&config_str);
     ASSERT(res, "plugin_config SerializeToString should always successful");
 
-    ENVOY_LOG(debug, "load tcp_upstream_golang library at parse config: {} {}", c.library_id(), c.library_path());
+    ENVOY_LOG(debug, "tcp upstream load tcp_upstream_golang library at parse config: {} {}", c.library_id(), c.library_path());
 
     // loads DSO store a static map and a open handles leak will occur when the filter gets loaded and
     // unloaded.
     // TODO: unload DSO when filter updated.
     auto dso_lib = Dso::DsoManager<Dso::TcpUpstreamDsoImpl>::load(c.library_id(), c.library_path(), c.plugin_name());
     if (dso_lib == nullptr) {
-      throw EnvoyException(fmt::format("tcp_upstream_golang: load library failed: {} {}", c.library_id(), c.library_path()));
+      throw EnvoyException(fmt::format("tcp upstream : load library failed: {} {}", c.library_id(), c.library_path()));
     };
 
     dynamic_lib_ = dso_lib;
@@ -94,8 +93,7 @@ TcpConnPool::TcpConnPool(Upstream::ThreadLocalCluster& thread_local_cluster,
       config_ = config;
     }
     plugin_name_ = c.plugin_name();
-
-  }
+}
 
 void TcpConnPool::onPoolReady(Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& conn_data,
                               Upstream::HostDescriptionConstSharedPtr host) {
@@ -104,7 +102,7 @@ void TcpConnPool::onPoolReady(Envoy::Tcp::ConnectionPool::ConnectionDataPtr&& co
   auto upstream =
       std::make_shared<TcpUpstream>(&callbacks_->upstreamToDownstream(), std::move(conn_data), dynamic_lib_, config_);
 
-  ENVOY_LOG(debug, "get host info: {}", host->cluster().name());
+  ENVOY_LOG(debug, "tcp upstream get host info: {}", host->cluster().name());
 
   callbacks_->onPoolReady(upstream, host, latched_conn.connectionInfoProvider(),
                           latched_conn.streamInfo(), {});       
@@ -125,6 +123,14 @@ TcpUpstream::TcpUpstream(Router::UpstreamToDownstream* upstream_request,
   upstream_conn_data_->addUpstreamCallbacks(*this);
 }
 
+TcpUpstream::~TcpUpstream() {
+  auto reason = (decoding_state_.isProcessingInGo() || encoding_state_.isProcessingInGo())
+                  ? DestroyReason::Terminate
+                  : DestroyReason::Normal;
+
+  dynamic_lib_->envoyGoOnTcpUpstreamDestroy(req_, int(reason));
+}
+
 bool TcpUpstream::initRequest() {
   if (req_->configId == 0) {
     req_->setWeakFilter(weak_from_this());
@@ -135,9 +141,7 @@ bool TcpUpstream::initRequest() {
 }
 
 void TcpUpstream::encodeData(Buffer::Instance& data, bool end_stream) {
-  // end_stream = false;
-
-  ENVOY_LOG(debug, "encodeData: {}", data.toString());
+  ENVOY_LOG(debug, "tcp upstream encodeData: {}", data.toString());
 
   initRequest();
 
@@ -148,7 +152,7 @@ void TcpUpstream::encodeData(Buffer::Instance& data, bool end_stream) {
 
   GoUint64 if_end_stream = dynamic_lib_->envoyGoEncodeData(
     s, end_stream ? 1 : 0, reinterpret_cast<uint64_t>(&buffer), buffer.length());
-  if (if_end_stream == 0) {
+  if (if_end_stream == static_cast<GoUint64>(EndStreamType::NotEndStream)) {
     end_stream = false;
   } else {
     end_stream = true;
@@ -163,11 +167,10 @@ void TcpUpstream::encodeData(Buffer::Instance& data, bool end_stream) {
 Envoy::Http::Status TcpUpstream::encodeHeaders(const Envoy::Http::RequestHeaderMap& headers,
                                                bool end_stream) {
    
-  ENVOY_LOG(debug, "encodeHeaders: {}", headers);
+  ENVOY_LOG(debug, "tcp upstream encodeHeaders: {}", headers);
 
   // Headers should only happen once, so use this opportunity to add the proxy
   // proto header, if configured.
-  // const Router::RouteEntry* route_entry = upstream_request_->route().routeEntry();
 
   ASSERT(route_entry_ != nullptr);
   if (route_entry_->connectConfig().has_value()) {
@@ -220,7 +223,7 @@ void TcpUpstream::resetStream() {
 }
 
 void TcpUpstream::onUpstreamData(Buffer::Instance& data, bool end_stream) {
-  ENVOY_LOG(debug, "golang-test onUpstreamData data length: {}, end: {}", data.length(), end_stream);
+  ENVOY_LOG(debug, "tcp upstream onUpstreamData data length: {}, end: {}", data.length(), end_stream);
 
   ProcessorState& state = decoding_state_;
   Buffer::Instance& buffer = state.doDataList.push(data);
@@ -233,17 +236,17 @@ void TcpUpstream::onUpstreamData(Buffer::Instance& data, bool end_stream) {
   state.setFilterState(FilterState::Done);
   state.doDataList.moveOut(data);
 
-  if (status == 0) { // UpstreamDataContinue 
-    return;
-  } else if (status == 1) { // UpstreamDataFinish
+  if (status == static_cast<GoUint64>(UpstreamDataStatus::UpstreamDataFinish)) { // UpstreamDataFinish 
     end_stream = true;
     upstream_request_->decodeData(data, end_stream);
+    return;
+  } else if (status == static_cast<GoUint64>(UpstreamDataStatus::UpstreamDataContinue)) { // UpstreamDataContinue
     return;
   } else { // UpstreamDataFailure
     end_stream = true;
     upstream_request_->decodeData(data, end_stream);
     return;
-  }
+  } 
 }
 
 void TcpUpstream::onEvent(Network::ConnectionEvent event) {
@@ -253,30 +256,26 @@ void TcpUpstream::onEvent(Network::ConnectionEvent event) {
 }
 
 void TcpUpstream::onAboveWriteBufferHighWatermark() {
+  ENVOY_LOG(debug, "tcp upstream onAboveWriteBufferHighWatermark");
   if (upstream_request_) {
     upstream_request_->onAboveWriteBufferHighWatermark();
   }
 }
 
 void TcpUpstream::onBelowWriteBufferLowWatermark() {
+  ENVOY_LOG(debug, "tcp upstream onBelowWriteBufferLowWatermark");
   if (upstream_request_) {
     upstream_request_->onBelowWriteBufferLowWatermark();
   }
 }
 
 CAPIStatus TcpUpstream::copyBuffer(ProcessorState& state, Buffer::Instance* buffer, char* data) {
-  // lock until this function return since it may running in a Go thread.
-  Thread::LockGuard lock(mutex_);
-  if (has_destroyed_) {
-    ENVOY_LOG(debug, "golang filter has been destroyed");
-    return CAPIStatus::CAPIFilterIsDestroy;
-  }
   if (!state.isProcessingInGo()) {
-    ENVOY_LOG(debug, "golang filter is not processing Go");
+    ENVOY_LOG(debug, "tcp upstream is not processing Go");
     return CAPIStatus::CAPINotInGo;
   }
   if (!state.doDataList.checkExisting(buffer)) {
-    ENVOY_LOG(debug, "invoking cgo api at invalid state: {}", __func__);
+    ENVOY_LOG(debug, "tcp upstream invoking cgo api at invalid state: {}", __func__);
     return CAPIStatus::CAPIInvalidPhase;
   }
   for (const Buffer::RawSlice& slice : buffer->getRawSlices()) {
@@ -289,18 +288,12 @@ CAPIStatus TcpUpstream::copyBuffer(ProcessorState& state, Buffer::Instance* buff
 }
 
 CAPIStatus TcpUpstream::drainBuffer(ProcessorState& state, Buffer::Instance* buffer, uint64_t length) {
-  // lock until this function return since it may running in a Go thread.
-  Thread::LockGuard lock(mutex_);
-  if (has_destroyed_) {
-    ENVOY_LOG(debug, "golang filter has been destroyed");
-    return CAPIStatus::CAPIFilterIsDestroy;
-  }
   if (!state.isProcessingInGo()) {
-    ENVOY_LOG(debug, "golang filter is not processing Go");
+    ENVOY_LOG(debug, "tcp upstream is not processing Go");
     return CAPIStatus::CAPINotInGo;
   }
   if (!state.doDataList.checkExisting(buffer)) {
-    ENVOY_LOG(debug, "invoking cgo api at invalid state: {}", __func__);
+    ENVOY_LOG(debug, "tcp upstream invoking cgo api at invalid state: {}", __func__);
     return CAPIStatus::CAPIInvalidPhase;
   }
 
@@ -310,18 +303,12 @@ CAPIStatus TcpUpstream::drainBuffer(ProcessorState& state, Buffer::Instance* buf
 
 CAPIStatus TcpUpstream::setBufferHelper(ProcessorState& state, Buffer::Instance* buffer,
                                    absl::string_view& value, bufferAction action) {
-  // lock until this function return since it may running in a Go thread.
-  Thread::LockGuard lock(mutex_);
-  if (has_destroyed_) {
-    ENVOY_LOG(debug, "golang filter has been destroyed");
-    return CAPIStatus::CAPIFilterIsDestroy;
-  }
   if (!state.isProcessingInGo()) {
-    ENVOY_LOG(debug, "golang filter is not processing Go");
+    ENVOY_LOG(debug, "tcp upstream is not processing Go");
     return CAPIStatus::CAPINotInGo;
   }
   if (!state.doDataList.checkExisting(buffer)) {
-    ENVOY_LOG(debug, "invoking cgo api at invalid state: {}", __func__);
+    ENVOY_LOG(debug, "tcp upstream invoking cgo api at invalid state: {}", __func__);
     return CAPIStatus::CAPIInvalidPhase;
   }
   if (action == bufferAction::Set) {
@@ -336,13 +323,6 @@ CAPIStatus TcpUpstream::setBufferHelper(ProcessorState& state, Buffer::Instance*
 }
 
 CAPIStatus TcpUpstream::getStringValue(int id, uint64_t* value_data, int* value_len) {
-  // lock until this function return since it may running in a Go thread.
-  Thread::LockGuard lock(mutex_);
-  if (has_destroyed_) {
-    ENVOY_LOG(debug, "golang filter has been destroyed");
-    return CAPIStatus::CAPIFilterIsDestroy;
-  }
-
   // refer the string to req_->strValue, not deep clone, make sure it won't be freed while reading
   // it on the Go side.
   switch (static_cast<EnvoyValue>(id)) {

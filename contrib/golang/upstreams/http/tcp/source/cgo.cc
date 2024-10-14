@@ -15,31 +15,6 @@ namespace Golang {
 // thread.
 //
 
-// Deep copy GoString into std::string, including the string content,
-// it's safe to use it after the current cgo call returns.
-std::string copyGoString(void* str) {
-  if (str == nullptr) {
-    return "";
-  }
-  auto go_str = reinterpret_cast<GoString*>(str);
-  return std::string{go_str->p, size_t(go_str->n)};
-}
-
-// The returned absl::string_view only refer to the GoString, won't copy the string content into
-// C++, should not use it after the current cgo call returns.
-absl::string_view referGoString(void* str) {
-  if (str == nullptr) {
-    return "";
-  }
-  auto go_str = reinterpret_cast<GoString*>(str);
-  return {go_str->p, static_cast<size_t>(go_str->n)};
-}
-
-enum class ConnectionInfoType {
-  ConnectionInfoRouterName = 2,
-	ConnectionInfoClusterName = 3,
-};
-
 // The returned absl::string_view only refer to Go memory,
 // should not use it after the current cgo call returns.
 absl::string_view stringViewFromGoPointer(void* p, int len) {
